@@ -15,6 +15,8 @@ The bot never logs message text. Test counts are posted only to the test channel
 
 ## Vercel
 
+The Dockerfile's default command runs only a small HTTP endpoint. The daemon command in vercel.json explicitly starts src/bot.js. Keep these entry points separate: otherwise website requests can launch extra Discord clients. Website success does not indicate the Discord daemon is healthy.
+
 The included Dockerfile and vercel.json target a single Vercel Daemon, currently a beta feature. Create a project using this directory as its root. Add DISCORD_TOKEN, DISCORD_GUILD_ID and TEST_CHANNEL_ID as production environment variables in Vercel. Deploy to production. No local .env is copied into the image. Verify daemon availability and quota on your account first. This is not a conventional request-only Vercel Function. No database is needed for this diagnostic stage.
 
 ## Next stages
@@ -26,4 +28,12 @@ The included Dockerfile and vercel.json target a single Vercel Daemon, currently
 - Unlock slots at 30 elapsed days + 60 AP + 20 active days, then 60 + 120 + 40. AP is not spent.
 - Handle edits, deletions, reconnect gaps and moderator corrections before enabling real awards.
 
-Known limitations: counting is heuristic and cannot detect copied or padded prose. Tupper prefixes are not stripped yet. There is no persistent storage, historical backfill, ownership verification, or production AP tracking in this prototype.
+## Ownership diagnostic update
+
+Set TUPPERBOX_BOT_ID to Tupperbox's actual bot user ID. Grant Ledger Manage Webhooks in the test channel so it can read the creator of incoming webhooks. Only creators matching that configured bot ID are trusted for this test. No webhook tokens are logged or persisted.
+
+src/brackets.json registers per-player wrappers. Lyra's L: wrapper is registered for the owner's supplied player ID. Autoproxy is tested by exact unchanged content. Matching requires a unique original in the same channel within 15 seconds, an observed deletion, and a trusted webhook creator. Reports wait 2.5 seconds for events to arrive. Missing or ambiguous evidence is held for review. Only content hashes and identifiers are retained transiently, for at most roughly 150 seconds including cleanup scheduling.
+
+This is correlation evidence, not a signed ownership response from Tupperbox. Do not enable awards based solely on this diagnostic. A busy server, delayed events, split messages, attachments, edits, transformations, missed originals, or restart gaps may require review. Display names are never treated as player identities. Character-specific autoproxy identity is not established by this test.
+
+Known limitations: counting is heuristic and cannot detect copied or padded prose. Ordinary-message diagnostic counts still include manually typed Tupper prefixes; final matched-proxy counts do not. There is no persistent storage, historical backfill, authoritative ownership attestation, or production AP tracking in this prototype.
