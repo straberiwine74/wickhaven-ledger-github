@@ -1,8 +1,9 @@
 import { creditWriting, serverDay } from './activity.js';
 import { UserError, registrationInput, adjustmentInput } from './admin.js';
+import { CharacterStore, characterSchema } from './character-store.js';
 
 export class TestLedger {
-  constructor(pool) { this.pool = pool; }
+  constructor(pool) { this.pool = pool; this.characters = new CharacterStore(pool); }
   async init() {
     const db = await this.pool.connect();
     try {
@@ -30,6 +31,7 @@ export class TestLedger {
         player_id text NOT NULL, day text NOT NULL, delta integer NOT NULL,
         before_ap integer NOT NULL, after_ap integer NOT NULL, reason text NOT NULL,
         created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (guild_id,request_id))`);
+      for (const sql of characterSchema) await db.query(sql);
       await db.query('COMMIT');
     } catch (e) { await db.query('ROLLBACK'); throw e; }
     finally { db.release(); }

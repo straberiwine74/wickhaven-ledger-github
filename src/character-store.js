@@ -1,0 +1,97 @@
+import { UserError } from './admin.js';
+import { characterInput, slotState } from './characters.js';
+
+export const characterSchema = [
+  `CREATE TABLE IF NOT EXISTS ledger_test_character_accounts (
+    guild_id text NOT NULL,player_id text NOT NULL,first_approved_at timestamptz,
+    earned_slots integer NOT NULL DEFAULT 2 CHECK (earned_slots BETWEEN 2 AND 4),
+    PRIMARY KEY (guild_id,player_id))`,
+  `CREATE TABLE IF NOT EXISTS ledger_test_characters (
+    guild_id text NOT NULL,player_id text NOT NULL,name_key text NOT NULL,name text NOT NULL,
+    sheet_id text NOT NULL,sheet_url text NOT NULL,stats_url text NOT NULL,sample_url text NOT NULL,
+    stat_set integer NOT NULL,resources text NOT NULL,
+    status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+    approved_at timestamptz,submitted_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (guild_id,player_id,name_key),UNIQUE (guild_id,sheet_id))`,
+  `CREATE TABLE IF NOT EXISTS ledger_test_character_reviews (
+    guild_id text NOT NULL,request_id text NOT NULL,player_id text NOT NULL,name_key text NOT NULL,
+    moderator_id text NOT NULL,decision text NOT NULL,note text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),PRIMARY KEY (guild_id,request_id))`
+];
+
+async function accountLock(db,guildId,playerId) {
+  await db.query('INSERT INTO ledger_test_character_accounts (guild_id,player_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',[guildId,playerId]);
+  return (await db.query('SELECT * FROM ledger_test_character_accounts WHERE guild_id=$1 AND player_id=$2 FOR UPDATE',[guildId,playerId])).rows[0];
+}
+async function progress(db,guildId,playerId,account,now) {
+  const counts = (await db.query('SELECT COALESCE(sum(ap),0)::integer AS total, count(*) FILTER (WHERE ap>0)::integer AS active FROM ledger_test_days WHERE guild_id=$1 AND player_id=$2',[guildId,playerId])).rows[0];
+  const state = slotState(account.first_approved_at,account.earned_slots,counts.total,counts.active,now);
+  if (state.unlocked > account.earned_slots) await db.query('UPDATE ledger_test_character_accounts SET earned_slots=$3 WHERE guild_id=$1 AND player_id=$2',[guildId,playerId,state.unlocked]);
+  return state;
+}
+
+export class CharacterStore {
+  constructor(pool) { this.pool=pool; }
+  async submit(guildId,playerId,input) {
+    const c=characterInput(input,guildId);
+    const db=await this.pool.connect();
+    try {
+      await db.query('BEGIN');
+      await accountLock(db,guildId,playerId);
+      const prior=(await db.query('SELECT status FROM ledger_test_characters WHERE guild_id=$1 AND player_id=$2 AND name_key=$3',[guildId,playerId,c.nameKey])).rows[0];
+      if (prior?.status==='approved') throw new UserError('That character is already approved. Ask staff about changes to an approved submission.');
+      await db.query(`INSERT INTO ledger_test_characters (guild_id,player_id,name_key,name,sheet_id,sheet_url,stats_url,sample_url,stat_set,resources)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (guild_id,player_id,name_key)
+        DO UPDATE SET name=EXCLUDED.name,sheet_id=EXCLUDED.sheet_id,sheet_url=EXCLUDED.sheet_url,stats_url=EXCLUDED.stats_url,sample_url=EXCLUDED.sample_url,stat_set=EXCLUDED.stat_set,resources=EXCLUDED.resources,status='pending',submitted_at=now()`,
+      [guildId,playerId,c.nameKey,c.name,c.sheetId,c.sheet,c.stats,c.sample,c.set,c.resources]);
+      await db.query('COMMIT'); return c;
+    } catch(e) {await db.query('ROLLBACK'); if(e.code==='23505') throw new UserError('That sheet is already submitted under another character or player. Ask staff to review it.'); throw e;}
+    finally{db.release();}
+  }
+  async list(guildId,playerId) {
+    return (await this.pool.query(`SELECT c.name,c.status,c.approved_at,
+      (SELECT r.note FROM ledger_test_character_reviews r WHERE r.guild_id=c.guild_id AND r.player_id=c.player_id AND r.name_key=c.name_key
+       ORDER BY r.created_at DESC,r.request_id DESC LIMIT 1) AS review_note
+      FROM ledger_test_characters c WHERE c.guild_id=$1 AND c.player_id=$2 ORDER BY c.submitted_at`,[guildId,playerId])).rows;
+  }
+  async review(guildId,playerId,name) {
+    const c=(await this.pool.query('SELECT * FROM ledger_test_characters WHERE guild_id=$1 AND player_id=$2 AND name_key=$3',[guildId,playerId,name.trim().toLowerCase()])).rows[0];
+    if(!c) throw new UserError('No submission with that name was found for this player.');
+    return c;
+  }
+  async slots(guildId,playerId,now=new Date()) {
+    const db=await this.pool.connect();
+    try {
+      await db.query('BEGIN');
+      const account=await accountLock(db,guildId,playerId);
+      const state=await progress(db,guildId,playerId,account,now);
+      const approved=(await db.query("SELECT count(*)::integer AS count FROM ledger_test_characters WHERE guild_id=$1 AND player_id=$2 AND status='approved'",[guildId,playerId])).rows[0].count;
+      await db.query('COMMIT'); return {...state,approved};
+    }catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}
+  }
+  async decide({guildId,playerId,name,moderatorId,requestId,decision,note,now=new Date()}) {
+    if(!['approved','rejected'].includes(decision)) throw new UserError('Invalid review decision.');
+    note=note.trim();
+    if(note.length<5||note.length>300) throw new UserError('Provide a review note of 5–300 characters.');
+    const key=name.trim().toLowerCase();
+    const db=await this.pool.connect();
+    try{
+      await db.query('BEGIN');
+      const account=await accountLock(db,guildId,playerId);
+      const prior=(await db.query('SELECT decision FROM ledger_test_character_reviews WHERE guild_id=$1 AND request_id=$2',[guildId,requestId])).rows[0];
+      if(prior){await db.query('ROLLBACK');return {duplicate:true,decision:prior.decision};}
+      const c=(await db.query('SELECT * FROM ledger_test_characters WHERE guild_id=$1 AND player_id=$2 AND name_key=$3',[guildId,playerId,key])).rows[0];
+      if(!c) throw new UserError('That player has no submission with that name.');
+      if(c.status!=='pending') throw new UserError(`That submission is already ${c.status}.`);
+      if(decision==='approved') {
+        const state=await progress(db,guildId,playerId,account,now);
+        const used=(await db.query("SELECT count(*)::integer AS count FROM ledger_test_characters WHERE guild_id=$1 AND player_id=$2 AND status='approved'",[guildId,playerId])).rows[0].count;
+        if(used>=state.unlocked) throw new UserError(`No available character slot: ${used}/${state.unlocked} used. Check /ledger-character slots.`);
+        await db.query('UPDATE ledger_test_character_accounts SET first_approved_at=COALESCE(first_approved_at,$3) WHERE guild_id=$1 AND player_id=$2',[guildId,playerId,now]);
+      }
+      await db.query('UPDATE ledger_test_characters SET status=$4,approved_at=$5 WHERE guild_id=$1 AND player_id=$2 AND name_key=$3',[guildId,playerId,key,decision,decision==='approved'?now:null]);
+      await db.query('INSERT INTO ledger_test_character_reviews (guild_id,request_id,player_id,name_key,moderator_id,decision,note) VALUES ($1,$2,$3,$4,$5,$6,$7)',[guildId,requestId,playerId,key,moderatorId,decision,note]);
+      await db.query('COMMIT');return {duplicate:false,decision,name:c.name};
+    }catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}
+  }
+}
