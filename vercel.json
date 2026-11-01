@@ -4,6 +4,7 @@
     "ledger": {
       "root": ".",
       "entrypoint": "Dockerfile",
+      "command": ["node", "src/bot.js"],
       "instances": { "iad1": 1 }
     }
   }
