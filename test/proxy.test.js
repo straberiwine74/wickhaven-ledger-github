@@ -32,3 +32,11 @@ test('only hashes retained and expiry removes records', () => {
   const t = setup(); assert.equal(t.originals.get('o1').content, undefined);
   t.expire(130000); assert.equal(t.originals.size, 0);
 });
+test('newly loaded registered brackets match even after original deletion', () => {
+  const t = new ProxyTracker();
+  t.original({ id: 'o1', playerId: 'p1', channelId: 'c', content: 'R:Hello there', time: 1000 });
+  t.deleted('o1');
+  t.addBrackets('o1','R:Hello there',[{ prefix: 'R:', suffix: '' }]);
+  proxy(t);
+  assert.equal(t.resolve('x').playerId,'p1');
+});

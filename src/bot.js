@@ -2,8 +2,9 @@ import { Client, Events, GatewayIntentBits, Partials, MessageFlags } from 'disco
 import pg from 'pg';
 import { TestLedger } from './store.js';
 import { countWords } from './activity.js';
-import { readFileSync } from 'node:fs';
 import { ProxyTracker } from './proxy.js';
+import { commands, handleCommand } from './commands.js';
+import { UserError } from './admin.js';
 
 const { DISCORD_TOKEN, DISCORD_GUILD_ID, TEST_CHANNEL_ID } = process.env;
 const savedTestMode = process.env.AP_TEST_MODE === 'true';
@@ -26,7 +27,8 @@ const client = new Client({
   allowedMentions: { parse: [] }
 });
 const recent = new Map();
-const tracker = new ProxyTracker(JSON.parse(readFileSync(new URL('./brackets.json', import.meta.url), 'utf8')));
+const tracker = new ProxyTracker();
+const bracketLookups = new Set();
 const timers = new Set();
 const ownerCache = new Map();
 async function trustedProxy(message) {
@@ -49,20 +51,19 @@ client.once(Events.ClientReady, async () => {
   console.log(`Ledger connected. Saved test AP: ${savedTestMode}. Real progression disabled.`);
   try {
     const guild = await client.guilds.fetch(DISCORD_GUILD_ID);
-    await guild.commands.create({ name: 'ledger-ap', description: 'View your separate test AP balance' });
+    for (const command of commands) await guild.commands.create(command);
     await report(savedTestMode ? '**Saved AP test is online.** Matched Tupper messages in this channel earn TEST credit. Use /ledger-ap to check your balance. Real progression is unaffected.' : '**Ledger ownership test is online.** No AP is awarded.');
   }
   catch { console.error('Cannot post startup greeting; check test-channel permissions.'); }
 });
 client.on(Events.InteractionCreate, async interaction => {
-  if (!interaction.isChatInputCommand() || interaction.commandName !== 'ledger-ap') return;
+  if (!interaction.isChatInputCommand() || !commands.some(c => c.name === interaction.commandName)) return;
   try {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     if (interaction.guildId !== DISCORD_GUILD_ID || interaction.channelId !== TEST_CHANNEL_ID) return await interaction.editReply('Use this test command in the configured bot-testing channel.');
     if (!ledger) return await interaction.editReply('Saved AP testing is disabled.');
-    const s = await ledger.status(DISCORD_GUILD_ID, interaction.user.id);
-    await interaction.editReply(`**TEST ledger — not real progression**\nToday: ${s.today}/4 AP\nTotal: ${s.total} AP\nUnfinished words: ${s.remainder}/300\nActive days: ${s.active_days}\nDaily reset: midnight America/Chicago.`);
-  } catch { console.error('AP status lookup failed.'); if (interaction.deferred) await interaction.editReply('The test balance could not be read. Please try again later.').catch(() => {}); }
+    await interaction.editReply({ content: await handleCommand(interaction,ledger,DISCORD_GUILD_ID), allowedMentions: { parse: [] } });
+  } catch (error) { console.error('Ledger command did not complete.'); if (interaction.deferred) await interaction.editReply({ content: error instanceof UserError ? error.message : 'The command could not be confirmed. Check your balance or audit history before retrying.', allowedMentions: { parse: [] } }).catch(() => {}); }
 });
 client.on(Events.MessageCreate, async message => {
   if (!isTest(message) || message.author.id === client.user.id) return;
@@ -70,7 +71,16 @@ client.on(Events.MessageCreate, async message => {
   try {
     const words = countWords(message.content);
     recent.set(message.id, { expires: Date.now() + 120000 });
-    if (!message.webhookId) tracker.original({ id: message.id, playerId: message.author.id, channelId: message.channelId, content: message.content, time: message.createdTimestamp });
+    if (!message.webhookId) {
+      tracker.original({ id: message.id, playerId: message.author.id, channelId: message.channelId, content: message.content, time: message.createdTimestamp });
+      if (ledger) {
+        const task = ledger.registrations(DISCORD_GUILD_ID,message.author.id)
+          .then(rows => tracker.addBrackets(message.id,message.content,rows))
+          .catch(() => console.error('Bracket lookup failed; prefixed matches may require review.'));
+        bracketLookups.add(task);
+        task.finally(() => bracketLookups.delete(task));
+      }
+    }
     else {
       let trusted = false;
       let trustDetail = '';
@@ -83,6 +93,8 @@ client.on(Events.MessageCreate, async message => {
       tracker.proxy({ id: message.id, channelId: message.channelId, content: message.content, time: message.createdTimestamp, trusted });
       const timer = setTimeout(async () => {
         timers.delete(timer);
+        // Wait for original-message registrations even if deletion arrived first.
+        await Promise.all([...bracketLookups]);
         const result = tracker.resolve(message.id);
         const text = result.status === 'matched'
           ? `**Original/proxy match found** • ${words} words • Player ID: ${result.playerId}\nOriginal: ${result.originalId} • Proxy: ${result.proxyId}\nMatched by content, timing, deletion, and Tupperbox webhook creator. This is correlation evidence, not a direct ownership attestation. No AP awarded.`

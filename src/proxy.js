@@ -21,6 +21,15 @@ export class ProxyTracker {
     this.originals.set(id, { id, playerId, channelId, time, hashes, deleted: false, claimed: false });
   }
   deleted(id) { const original = this.originals.get(id); if (original) original.deleted = true; }
+  addBrackets(id, content, brackets) {
+    const original = this.originals.get(id);
+    if (!original) return;
+    for (const b of brackets) {
+      if (content.startsWith(b.prefix) && (!b.suffix || content.endsWith(b.suffix))) {
+        original.hashes.add(digest(content.slice(b.prefix.length, b.suffix ? -b.suffix.length : undefined)));
+      }
+    }
+  }
   proxy({ id, channelId, content, time, trusted }) {
     if (!this.proxies.has(id)) this.proxies.set(id, { id, channelId, hash: digest(content), time, trusted, resolved: false });
   }

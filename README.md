@@ -1,49 +1,40 @@
-# The Wickhaven Ledger — diagnostic prototype
+# The Wickhaven Ledger — saved TEST AP
 
-## Saved TEST AP stage
+This update adds self-service brackets and audited staff corrections. Existing test balances are preserved. It still tracks only the test channel and does not enable real progression.
 
-Set AP_TEST_MODE=true and provide the Neon DATABASE_URL in Production environment variables. Existing Discord/Tupper settings remain required. Startup creates only ledger_test_players, ledger_test_days and ledger_test_events. These tables never count toward real progression. They store IDs, dates, word counts and AP, not message content.
+## Setup
+Keep existing variables unchanged. AP_TEST_MODE=true and DATABASE_URL enable test storage. MODERATOR_ROLE_IDS is optional: comma-separated role IDs allowed to moderate. Administrators are allowed automatically. Enable Message Content Intent and Manage Webhooks in the testing channel.
 
-Only successfully matched Tupper messages in TEST_CHANNEL_ID are credited. Ordinary messages and ambiguous proxies remain diagnostic-only. /ledger-ap shows the invoking player's private test balance in that channel. Grant Use Application Commands where needed. Database failures do not produce a successful saved-credit report. Restarting preserves committed balances; messages missed during downtime are not backfilled.
+## Player commands
+- /ledger-tupper register name:Ryder prefix:R:
+- /ledger-tupper register name:Lyra prefix:L:
+- /ledger-tupper list
+- /ledger-tupper remove name:Ryder
+- /ledger-ap
 
-Test sequence: send 300 words of original sample prose through Lyra, run /ledger-ap, redeploy, and run /ledger-ap again. Check that the balance survives. Test the remainder with shorter messages. Do not repeatedly send identical sample posts within 15 seconds: ambiguous matches are intentionally held.
+Omit suffix for a prefix-only Tupper. Paired and suffix-only brackets are also supported. Registering the same character name updates its brackets. Entries are per player and persist without a deployment. Prefixes may be shared by different players. Existing hard-coded Lyra brackets are no longer used; register Lyra once too.
 
-Current limitations before production: no moderation adjustments, approval dates, real slot unlocks, other channels, gathering awards, historical replay or edit/delete reconciliation. Edits or deletions after credit do not change this disposable test balance. Proxy correlation is not authoritative Tupperbox attestation. Commands and obvious quotes are excluded heuristically; copied or padded prose needs human review. Concurrent deployment overlap is deduplicated by unique original/proxy IDs and serialized player records in transactions. These constraints have local embedded-Postgres tests; hosted Neon connectivity still needs deployment validation.
+Registration normalizes original-message text. It does not change Tupperbox, approve a character, grant a slot, or verify the displayed character identity. Only the initiating Discord account can manage its entries.
 
-This version observes only the configured test channel. It does not award AP, store RP text, associate proxy names with players, or implement quests. Do not enable real awards until ownership, deduplication and persistence are validated.
+## Staff commands
+- /ledger-adjust player:@player change:-1 reason:Correction
+- Optional day:2026-10-31; defaults to today in America/Chicago.
+- /ledger-audit player:@player
 
-## Run locally
+The commands default to administrator-only. For moderators, configure MODERATOR_ROLE_IDS and grant those roles the corresponding command permissions under Discord Server Settings > Integrations > The Wickhaven Ledger. Runtime authorization checks the actual member's administrator permission or configured roles.
 
-1. Install Node.js 24.
-2. In this folder run `npm ci`.
-3. Copy `.env.example` to `.env` and fill in the three settings locally. Never share or commit `.env`.
-4. Enable Discord Developer Mode to copy server and channel IDs. The token comes from the application's Bot page.
-5. Run `npm start`.
-6. Send a normal message, a manually bracketed Tupper message, and an autoproxy message in the test channel. Confirm reports and original-message deletion observations.
+Every adjustment records moderator, target, date, before/after AP, reason and interaction ID. Duplicate interactions cannot apply twice. Daily AP must stay between zero and four. Totals and active days update from daily balances. A day is active if it has at least one AP. Undo a correction with another reasoned correction; audit entries remain.
 
-The bot never logs message text. Test counts are posted only to the test channel. Test with non-sensitive sample writing.
+Adjustments change AP only. They do not remove unfinished words or invalidate source writing. Removing today's AP can allow later writing to earn AP again. Raw RP or adult scene text must not be put in correction reasons. Source-event and word deductions remain future work.
 
-## Vercel
+## Storage and attribution
+Tables: ledger_test_players, ledger_test_days, ledger_test_events, ledger_test_adjustments, ledger_proxy_registrations. Store IDs, dates, counts, bracket settings and reasons, not RP text. Transactions serialize AP changes per player and unique original/proxy IDs prevent duplicate credit.
 
-The Dockerfile's default command runs only a small HTTP endpoint. The daemon command in vercel.json explicitly starts src/bot.js. Keep these entry points separate: otherwise website requests can launch extra Discord clients. Website success does not indicate the Discord daemon is healthy.
+Matching needs the Tupperbox webhook creator, a unique matching original in the same channel within 15 seconds, bracket-normalized text, and observed deletion. Pending bracket lookups are awaited. Autoproxy matches unchanged text. This remains correlation evidence, not a signed Tupperbox attestation. Display names are never identities. Ambiguous or missing evidence gets no automatic credit.
 
-The included Dockerfile and vercel.json target a single Vercel Daemon, currently a beta feature. Create a project using this directory as its root. Add DISCORD_TOKEN, DISCORD_GUILD_ID and TEST_CHANNEL_ID as production environment variables in Vercel. Deploy to production. No local .env is copied into the image. Verify daemon availability and quota on your account first. This is not a conventional request-only Vercel Function. No database is needed for this diagnostic stage.
+Current limits: no historical backfill, edit/delete reconciliation, gathering AP, approval dates or real slot unlocks. Only matched proxy writing counts in TEST_CHANNEL_ID. Ordinary messages remain diagnostic-only. Edits or deletions after credit do not revise the test balance. Word counting is heuristic; moderators must review copied or padded prose. Registration is not approval and does not enforce character slots yet.
 
-## Next stages
+## Run and deploy
+Use Node 24; npm ci, then npm test. Copy .env.example to .env for local private settings and run npm start. Never commit .env.
 
-- Verify proxy attribution; never trust a display name or count original and proxy twice. Missing or ambiguous attribution must be held for review, not guessed.
-- Add Postgres transactions, unique source-event IDs, daily player totals, word remainder, approval dates and an immutable adjustment ledger.
-- Add moderator controls and private progress commands.
-- Persist 300 words/AP, combined 4 AP/day, Chicago dates, one repeatable gathering AP/day, and designated expedition milestones.
-- Unlock slots at 30 elapsed days + 60 AP + 20 active days, then 60 + 120 + 40. AP is not spent.
-- Handle edits, deletions, reconnect gaps and moderator corrections before enabling real awards.
-
-## Ownership diagnostic update
-
-Set TUPPERBOX_BOT_ID to Tupperbox's actual bot user ID. Grant Ledger Manage Webhooks in the test channel so it can read the creator of incoming webhooks. Only creators matching that configured bot ID are trusted for this test. No webhook tokens are logged or persisted.
-
-src/brackets.json registers per-player wrappers. Lyra's L: wrapper is registered for the owner's supplied player ID. Autoproxy is tested by exact unchanged content. Matching requires a unique original in the same channel within 15 seconds, an observed deletion, and a trusted webhook creator. Reports wait 2.5 seconds for events to arrive. Missing or ambiguous evidence is held for review. Only content hashes and identifiers are retained transiently, for at most roughly 150 seconds including cleanup scheduling.
-
-This is correlation evidence, not a signed ownership response from Tupperbox. Do not enable awards based solely on this diagnostic. A busy server, delayed events, split messages, attachments, edits, transformations, missed originals, or restart gaps may require review. Display names are never treated as player identities. Character-specific autoproxy identity is not established by this test.
-
-Known limitations: counting is heuristic and cannot detect copied or padded prose. Ordinary-message diagnostic counts still include manually typed Tupper prefixes; final matched-proxy counts do not. There is no persistent storage, historical backfill, authoritative ownership attestation, or production AP tracking in this prototype.
+Upload this project's contents at the GitHub repository root. Dockerfile defaults to src/web.js for website traffic, while vercel.json explicitly starts src/bot.js only in the daemon. Keep them separate. Vercel Daemons run only in production and have usage quotas. The database tables initialize automatically. No secrets are included in this package. Tests use embedded PostgreSQL; hosted behavior needs live verification.

@@ -36,3 +36,40 @@ test('database saves, deduplicates, carries words across days and enforces cap',
     assert.equal(proxyDuplicate.duplicate, true);
   } finally { await db.close(); }
 });
+
+test('registrations are per-player and corrections are audited, idempotent and bounded', async () => {
+  const db = new PGlite();
+  const pool = { query: db.query.bind(db), connect: async () => ({ query: db.query.bind(db), release() {} }) };
+  const ledger = new TestLedger(pool);
+  try {
+    await ledger.init();
+    await ledger.register('g','p','Ryder','R:');
+    await ledger.register('g','p','Lyra','L:');
+    await ledger.register('g','other','Their Ryder','R:');
+    assert.equal((await ledger.registrations('g','p')).length,2);
+    assert.equal((await ledger.registrations('g','other')).length,1);
+    assert.equal((await new TestLedger(pool).registrations('g','p'))[1].prefix,'R:');
+    assert.equal(await ledger.unregister('g','other','Lyra'),0);
+    await ledger.register('g','p','Ryder','Ry:');
+    assert.equal((await ledger.registrations('g','p'))[1].prefix,'Ry:');
+    await assert.rejects(ledger.register('g','p','Conflict','L:'), /already registered/);
+    await ledger.record({ guildId:'g',playerId:'p',originalId:'o',proxyId:'x',words:350,time:'2026-10-31T18:00:00Z' });
+    const input = { guildId:'g',playerId:'p',moderatorId:'mod',requestId:'a1',delta:-1,day:'2026-10-31',reason:'Remove test award',today:'2026-10-31' };
+    const correction = await ledger.adjust(input);
+    assert.equal(correction.before_ap,1);
+    assert.equal(correction.after_ap,0);
+    const status = await ledger.status('g','p',Date.parse('2026-10-31T19:00:00Z'));
+    assert.deepEqual(status,{ remainder:50,total:0,active_days:0,today:0 });
+    assert.equal((await ledger.adjust(input)).duplicate,true);
+    await assert.rejects(ledger.adjust({ ...input,requestId:'a2' }), /between 0 and 4/);
+    await ledger.adjust({ ...input,requestId:'a3',delta:4,reason:'Restore test credit' });
+    await assert.rejects(ledger.adjust({ ...input,requestId:'a4',delta:1 }), /between 0 and 4/);
+    assert.equal((await ledger.status('g','p')).total,4);
+    const audit = await ledger.audit('g','p');
+    assert.equal(audit.length,2);
+    assert.equal(audit[0].moderator_id,'mod');
+    assert.equal((await ledger.audit('other','p')).length,0);
+    assert.equal(await ledger.unregister('g','p','Ryder'),1);
+    assert.equal((await ledger.registrations('g','p')).length,1);
+  } finally { await db.close(); }
+});
