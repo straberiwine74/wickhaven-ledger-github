@@ -8,6 +8,7 @@ import { UserError } from './admin.js';
 import { ReviewPosts } from './review-posts.js';
 import { reviewInteraction } from './review-interactions.js';
 import { CharacterNotifications } from './character-notifications.js';
+import { installQuests } from './quest-discord.js';
 
 const { DISCORD_TOKEN, DISCORD_GUILD_ID, TEST_CHANNEL_ID } = process.env;
 const savedTestMode = process.env.AP_TEST_MODE === 'true';
@@ -29,6 +30,12 @@ const client = new Client({
   partials: [Partials.Message, Partials.Channel],
   allowedMentions: { parse: [] }
 });
+if (process.env.QUEST_TEST_ENABLED === 'true') {
+  if (!pool || !/^\d{17,20}$/.test(process.env.AVRAE_BOT_ID??'') || !/^\d{17,20}$/.test(process.env.QUEST_TEST_CHANNEL_ID??'')) {
+    console.error('Quest test requires saved AP test mode, AVRAE_BOT_ID and QUEST_TEST_CHANNEL_ID.'); process.exit(1);
+  }
+  await installQuests(client,pool,{guild:DISCORD_GUILD_ID,channel:process.env.QUEST_TEST_CHANNEL_ID,avrae:process.env.AVRAE_BOT_ID});
+}
 if(ledger&&process.env.CHARACTERS_CHANNEL_ID&&process.env.MODERATOR_ROLE_IDS){
   ledger.reviewPosts=new ReviewPosts(pool,client,DISCORD_GUILD_ID,process.env.CHARACTERS_CHANNEL_ID,process.env.MODERATOR_ROLE_IDS.split(',')[0].trim());
 }
@@ -72,6 +79,7 @@ client.once(Events.ClientReady, async () => {
   void publishPending();
 });
 client.on(Events.InteractionCreate, async interaction => {
+  if(interaction.customId?.startsWith('quest:')) return;
   if(interaction.isButton()||interaction.isModalSubmit()){
     await reviewInteraction(interaction,ledger,DISCORD_GUILD_ID);return;
   }

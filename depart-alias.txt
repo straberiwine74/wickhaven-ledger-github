@@ -1,0 +1,16 @@
+!servalias depart embed <drac2>
+c = character()
+if "&*&".strip() != "drowned-watch":
+    err("Use !depart drowned-watch")
+manifest = load_json(c.get_cvar("ledger_loadout", "null"))
+if not manifest:
+    err("Set ledger_loadout first. This is a declared manifest, not imported D&D Beyond inventory.")
+skills = {k: {"mod": v.value, "adv": v.adv} for k, v in c.skills if k in ["athletics", "stealth", "investigation", "perception"]}
+p = c.coinpurse
+data = {"v": 1, "quest": "drowned-watch", "guild": str(ctx.guild.id), "channel": str(ctx.channel.id), "player": str(ctx.author.id), "invocation": str(ctx.message_id), "character": c.upstream, "name": c.name, "hp": c.hp, "maxHp": c.max_hp, "tempHp": c.temp_hp, "skills": skills, "passive": manifest["passivePerception"], "loadout": {"source": "declared-manifest", "items": manifest["items"]}, "coins": {"pp": p.pp, "gp": p.gp, "ep": p.ep, "sp": p.sp, "cp": p.cp}, "signature": signature(7)}
+encoded = dump_json(data)
+if len(encoded) > 3800:
+    err("Export too large. Use fewer manifest entries; do not omit expedition-relevant gear.")
+desc = "```json\n" + encoded + "\n```"
+</drac2>
+-title "BTLL departure v1" -desc {{dump_json(desc)}} -footer "TEST departure export — review the Ledger confirmation before departing."
