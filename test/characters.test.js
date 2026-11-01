@@ -12,6 +12,24 @@ test('character submission validates sources, message guild, selected set and re
   assert.equal(characterInput(input('Lyra',123),guild).sheetId,'123');
   for(const patch of [{sheet:'https://dndbeyond.com.evil.test/characters/123'},{sheet:'https://x:dndbeyond.com@evil.test/characters/123'},{stats:link.replace(guild,'999999999999999999')},{set:4},{resources:'mixed'},{sample:'not a link'}])assert.throws(()=>characterInput({...input('Lyra',123),...patch},guild));
 });
+test('D&D Beyond share links retain their complete URL and stable character identity',()=>{
+  const sheet='https://www.dndbeyond.com/characters/173040985/hE5rqg';
+  const shared=characterInput({...input('Lyra',173040985),sheet},guild);
+  assert.equal(shared.sheet,sheet);
+  assert.equal(shared.sheetId,characterInput(input('Lyra',173040985),guild).sheetId);
+  assert.equal(characterInput({...input('Lyra',173040985),sheet:sheet+'/?view=share'},guild).sheet,sheet+'/?view=share');
+  for(const bad of [sheet+'/extra',sheet.replace('www.dndbeyond.com','dndbeyond.com.evil.test')])assert.throws(()=>characterInput({...input('Lyra',173040985),sheet:bad},guild));
+});
+test('database retains the share link and prevents a second claim via the plain URL',async()=>{
+  const db=new PGlite();const pool={query:db.query.bind(db),connect:async()=>({query:db.query.bind(db),release(){}})};
+  const ledger=new TestLedger(pool);const sheet='https://www.dndbeyond.com/characters/173040985/hE5rqg';
+  try{
+    await ledger.init();
+    await ledger.characters.submit(guild,'p',{...input('Lyra',173040985),sheet});
+    assert.equal((await ledger.characters.review(guild,'p','Lyra')).sheet_url,sheet);
+    await assert.rejects(ledger.characters.submit(guild,'other',input('Same sheet',173040985)),/already submitted/);
+  }finally{await db.close();}
+});
 test('slot calculation requires time AND AP AND active days',()=>{
   const first='2026-01-01T12:00:00Z';
   assert.equal(slotState(null,2,120,40,new Date('2026-03-03')).unlocked,2);

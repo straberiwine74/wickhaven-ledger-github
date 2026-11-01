@@ -13,11 +13,11 @@ export function characterInput(input, guildId) {
   if (!name || name.length > 80 || /[\r\n]/.test(name)) throw new UserError('Use a character name of 1–80 characters on one line.');
   let sheet;
   try { sheet = new URL(input.sheet); } catch { throw new UserError('Use a D&D Beyond character-sheet link.'); }
-  const match = sheet.pathname.match(/^\/(?:profile\/[^/]+\/)?characters\/(\d+)\/?$/);
+  const match = sheet.pathname.match(/^\/(?:profile\/[^/]+\/)?characters\/(\d+)(?:\/[A-Za-z0-9_-]{1,128})?\/?$/);
   if (sheet.protocol !== 'https:' || !['www.dndbeyond.com','dndbeyond.com'].includes(sheet.hostname) || !match || sheet.username || sheet.password) throw new UserError('Use a D&D Beyond character-sheet link.');
   if (![1,2,3].includes(input.set)) throw new UserError('Choose stat set 1, 2 or 3.');
   if (!['equipment','gold'].includes(input.resources)) throw new UserError('Choose equipment for both packages, or gold for both packages.');
-  return { name, nameKey:name.toLowerCase(), sheetId:match[1], sheet:`https://www.dndbeyond.com/characters/${match[1]}`, stats:messageLink(input.stats,guildId), sample:messageLink(input.sample,guildId), set:input.set, resources:input.resources };
+  return { name, nameKey:name.toLowerCase(), sheetId:match[1], sheet:sheet.href, stats:messageLink(input.stats,guildId), sample:messageLink(input.sample,guildId), set:input.set, resources:input.resources };
 }
 export function slotState(firstApproval, earnedSlots, totalAP, activeDays, now = new Date()) {
   const elapsedDays = firstApproval ? Math.max(0,Math.floor((new Date(now) - new Date(firstApproval)) / 86400000)) : 0;
