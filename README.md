@@ -1,5 +1,15 @@
 # The Wickhaven Ledger — diagnostic prototype
 
+## Saved TEST AP stage
+
+Set AP_TEST_MODE=true and provide the Neon DATABASE_URL in Production environment variables. Existing Discord/Tupper settings remain required. Startup creates only ledger_test_players, ledger_test_days and ledger_test_events. These tables never count toward real progression. They store IDs, dates, word counts and AP, not message content.
+
+Only successfully matched Tupper messages in TEST_CHANNEL_ID are credited. Ordinary messages and ambiguous proxies remain diagnostic-only. /ledger-ap shows the invoking player's private test balance in that channel. Grant Use Application Commands where needed. Database failures do not produce a successful saved-credit report. Restarting preserves committed balances; messages missed during downtime are not backfilled.
+
+Test sequence: send 300 words of original sample prose through Lyra, run /ledger-ap, redeploy, and run /ledger-ap again. Check that the balance survives. Test the remainder with shorter messages. Do not repeatedly send identical sample posts within 15 seconds: ambiguous matches are intentionally held.
+
+Current limitations before production: no moderation adjustments, approval dates, real slot unlocks, other channels, gathering awards, historical replay or edit/delete reconciliation. Edits or deletions after credit do not change this disposable test balance. Proxy correlation is not authoritative Tupperbox attestation. Commands and obvious quotes are excluded heuristically; copied or padded prose needs human review. Concurrent deployment overlap is deduplicated by unique original/proxy IDs and serialized player records in transactions. These constraints have local embedded-Postgres tests; hosted Neon connectivity still needs deployment validation.
+
 This version observes only the configured test channel. It does not award AP, store RP text, associate proxy names with players, or implement quests. Do not enable real awards until ownership, deduplication and persistence are validated.
 
 ## Run locally
