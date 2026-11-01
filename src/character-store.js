@@ -16,7 +16,13 @@ export const characterSchema = [
   `CREATE TABLE IF NOT EXISTS ledger_test_character_reviews (
     guild_id text NOT NULL,request_id text NOT NULL,player_id text NOT NULL,name_key text NOT NULL,
     moderator_id text NOT NULL,decision text NOT NULL,note text NOT NULL,
-    created_at timestamptz NOT NULL DEFAULT now(),PRIMARY KEY (guild_id,request_id))`
+    created_at timestamptz NOT NULL DEFAULT now(),PRIMARY KEY (guild_id,request_id))`,
+  `ALTER TABLE ledger_test_characters ADD COLUMN IF NOT EXISTS revision integer NOT NULL DEFAULT 1`,
+  `ALTER TABLE ledger_test_characters ADD COLUMN IF NOT EXISTS needs_publish boolean NOT NULL DEFAULT true`,
+  `CREATE TABLE IF NOT EXISTS ledger_test_review_posts (
+    guild_id text NOT NULL,player_id text NOT NULL,name_key text NOT NULL,
+    thread_id text NOT NULL,message_id text NOT NULL,last_ping_revision integer NOT NULL DEFAULT 0,
+    PRIMARY KEY (guild_id,player_id,name_key))`
 ];
 
 async function accountLock(db,guildId,playerId) {
@@ -42,7 +48,7 @@ export class CharacterStore {
       if (prior?.status==='approved') throw new UserError('That character is already approved. Ask staff about changes to an approved submission.');
       await db.query(`INSERT INTO ledger_test_characters (guild_id,player_id,name_key,name,sheet_id,sheet_url,stats_url,sample_url,stat_set,resources)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (guild_id,player_id,name_key)
-        DO UPDATE SET name=EXCLUDED.name,sheet_id=EXCLUDED.sheet_id,sheet_url=EXCLUDED.sheet_url,stats_url=EXCLUDED.stats_url,sample_url=EXCLUDED.sample_url,stat_set=EXCLUDED.stat_set,resources=EXCLUDED.resources,status='pending',submitted_at=now()`,
+        DO UPDATE SET name=EXCLUDED.name,sheet_id=EXCLUDED.sheet_id,sheet_url=EXCLUDED.sheet_url,stats_url=EXCLUDED.stats_url,sample_url=EXCLUDED.sample_url,stat_set=EXCLUDED.stat_set,resources=EXCLUDED.resources,status='pending',submitted_at=now(),revision=ledger_test_characters.revision+1,needs_publish=true`,
       [guildId,playerId,c.nameKey,c.name,c.sheetId,c.sheet,c.stats,c.sample,c.set,c.resources]);
       await db.query('COMMIT'); return c;
     } catch(e) {await db.query('ROLLBACK'); if(e.code==='23505') throw new UserError('That sheet is already submitted under another character or player. Ask staff to review it.'); throw e;}
@@ -69,7 +75,7 @@ export class CharacterStore {
       await db.query('COMMIT'); return {...state,approved};
     }catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}
   }
-  async decide({guildId,playerId,name,moderatorId,requestId,decision,note,now=new Date()}) {
+  async decide({guildId,playerId,name,moderatorId,requestId,decision,note,now=new Date(),expectedRevision}) {
     if(!['approved','rejected'].includes(decision)) throw new UserError('Invalid review decision.');
     note=note.trim();
     if(note.length<5||note.length>300) throw new UserError('Provide a review note of 5–300 characters.');
@@ -82,6 +88,7 @@ export class CharacterStore {
       if(prior){await db.query('ROLLBACK');return {duplicate:true,decision:prior.decision};}
       const c=(await db.query('SELECT * FROM ledger_test_characters WHERE guild_id=$1 AND player_id=$2 AND name_key=$3',[guildId,playerId,key])).rows[0];
       if(!c) throw new UserError('That player has no submission with that name.');
+      if(expectedRevision!==undefined&&c.revision!==expectedRevision)throw new UserError('This submission changed after the review was opened. Review the latest post before deciding.');
       if(c.status!=='pending') throw new UserError(`That submission is already ${c.status}.`);
       if(decision==='approved') {
         const state=await progress(db,guildId,playerId,account,now);
@@ -89,7 +96,7 @@ export class CharacterStore {
         if(used>=state.unlocked) throw new UserError(`No available character slot: ${used}/${state.unlocked} used. Check /ledger-character slots.`);
         await db.query('UPDATE ledger_test_character_accounts SET first_approved_at=COALESCE(first_approved_at,$3) WHERE guild_id=$1 AND player_id=$2',[guildId,playerId,now]);
       }
-      await db.query('UPDATE ledger_test_characters SET status=$4,approved_at=$5 WHERE guild_id=$1 AND player_id=$2 AND name_key=$3',[guildId,playerId,key,decision,decision==='approved'?now:null]);
+      await db.query('UPDATE ledger_test_characters SET status=$4,approved_at=$5,needs_publish=true WHERE guild_id=$1 AND player_id=$2 AND name_key=$3',[guildId,playerId,key,decision,decision==='approved'?now:null]);
       await db.query('INSERT INTO ledger_test_character_reviews (guild_id,request_id,player_id,name_key,moderator_id,decision,note) VALUES ($1,$2,$3,$4,$5,$6,$7)',[guildId,requestId,playerId,key,moderatorId,decision,note]);
       await db.query('COMMIT');return {duplicate:false,decision,name:c.name};
     }catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}

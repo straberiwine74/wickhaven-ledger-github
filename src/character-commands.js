@@ -11,6 +11,7 @@ export const characterCommands=[
       {type:3,name:'resources',description:'Choose the same method for both class and background',required:true,choices:[{name:'Equipment from both',value:'equipment'},{name:'Gold from both',value:'gold'}]}
     ]},
     {type:1,name:'list',description:'View your submitted TEST characters'},
+    {type:1,name:'publish',description:'Publish or repair your saved review post',options:[str('name','Submitted character name')]},
     {type:1,name:'slots',description:'View TEST slots and unlock progress'}
   ]},
   {name:'ledger-review',description:'Staff: inspect a TEST character submission',default_member_permissions:'0',options:[target,str('name','Submitted character name')]},
@@ -36,7 +37,14 @@ export async function handleCharacterCommand(interaction,ledger,guildId){
         stats:interaction.options.getString('stats',true),sample:interaction.options.getString('sample',true),
         set:interaction.options.getInteger('set',true),resources:interaction.options.getString('resources',true)
       });
-      return `**TEST submission saved: ${c.name}**\nStatus: pending staff review. This is not approval or an Avrae import.\nStaff can review it with /ledger-review. Your character forum post remains the place for discussion.`;
+      let publication;
+      try{publication=ledger.reviewPosts?`Review post: ${await ledger.reviewPosts.sync(playerId,c.name)}`:'Public review posting is not configured yet. Ask an administrator to configure it.';}
+      catch(error){publication=`Saved, but the public review post could not be confirmed. It is queued for retry. ${error instanceof UserError?error.message:'Check bot permissions in the characters forum.'}`;}
+      return `**TEST submission saved: ${c.name}**\nStatus: pending staff review. This is not approval or an Avrae import.\n${publication}`;
+    }
+    if(sub==='publish'){
+      if(!ledger.reviewPosts)throw new UserError('Public review posting is not configured.');
+      return `Review post: ${await ledger.reviewPosts.sync(playerId,interaction.options.getString('name',true))}`;
     }
     if(sub==='slots')return formatSlots(await store.slots(guildId,playerId));
     const rows=await store.list(guildId,playerId);
@@ -55,5 +63,7 @@ export async function handleCharacterCommand(interaction,ledger,guildId){
   const approved=interaction.commandName==='ledger-approve';
   if(approved&&!interaction.options.getBoolean('verified',true))throw new UserError('Complete the manual review, then set verified to true.');
   const result=await store.decide({guildId,playerId:player.id,name,moderatorId:playerId,requestId:interaction.id,decision:approved?'approved':'rejected',note:interaction.options.getString(approved?'note':'reason',true)});
-  return `**TEST character ${result.duplicate?'review already recorded':result.decision}**\nPlayer ID: ${player.id}\nCharacter: ${name}\n${approved?'A character slot is used. The first approval starts the 30/60-day clock; later approvals do not reset it.':'The player may correct and resubmit the same name. No slot was used.'}\nStaff decision and note were recorded. No Discord roles or Tupper settings were changed.`;
+  let publication='';
+  if(ledger.reviewPosts)try{publication=`\nReview post: ${await ledger.reviewPosts.sync(player.id,name)}`;}catch{publication='\nDecision saved; public post update is queued for retry.';}
+  return `**TEST character ${result.duplicate?'review already recorded':result.decision}**\nPlayer ID: ${player.id}\nCharacter: ${name}\n${approved?'A character slot is used. The first approval starts the 30/60-day clock; later approvals do not reset it.':'The player may correct and resubmit the same name. No slot was used.'}\nStaff decision and note were recorded. No Discord roles or Tupper settings were changed.${publication}`;
 }

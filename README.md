@@ -2,6 +2,20 @@
 
 This update adds self-service brackets and audited staff corrections. Existing test balances are preserved. It still tracks only the test channel and does not enable real progression.
 
+## Public review forum
+
+Set CHARACTERS_CHANNEL_ID=1566205298870325288 and MODERATOR_ROLE_IDS=1566212934449893457 in Vercel Production. If there are multiple moderator roles, use comma-separated IDs; the first is the notification role. All listed roles pass runtime staff authorization. Administrators also pass.
+
+Grant Ledger View Channel, Send Messages (to create forum posts), Send Messages in Threads, Read Message History, Embed Links, and Manage Threads in the characters forum. To notify a non-mentionable Moderator role, allow Mention @everyone, @here, and All Roles specifically in that forum; the code's explicit role allowlist permits only the configured moderator role and never @everyone. Alternatively, make the notification role mentionable. Required forum tags should be disabled, or provide Pending, Approved and Changes Requested tags.
+
+Each submission publishes a public forum post containing its player, character-sheet link, selected stat-set and roll link, RP-sample link, resource selection, rules checklist, status and staff review buttons. No linked message or sheet content is copied. Review notes entered by staff are public; never include sensitive scene text. The separate approved-character directory is not touched.
+
+The Approve button requires a public note and typing APPROVE to attest manual review. Request Changes requires a public correction note. Every button and modal rechecks staff authorization. Modal submission checks the revision, so a changed submission cannot be approved from a stale modal. Role and slot changes remain governed by the existing database review logic; no Discord roles are assigned.
+
+Resubmitting updates the same post, increments its revision and sends a fresh moderator alert. Completed decisions update the starter message and disable its buttons. /ledger-character publish name:Character repairs or publishes an existing submission without resubmission. Existing saved records are queued automatically at startup; queued failures retry every minute. A save can succeed even if Discord publishing fails; the private reply distinguishes that case. Database row locks and stored thread IDs prevent normal duplicate posts; recovery searches bot-created active and archived posts by a stable marker after an interrupted creation. Network failure around a Discord notification may still produce a duplicate ping; Discord and Postgres cannot commit atomically.
+
+Character commands work in bot-testing and in the configured review forum and its posts. Other commands and AP tracking remain restricted to bot-testing. No public text here earns AP. Default staff slash commands remain administrator-only in Discord; enable the Moderator role in the app's command permissions if moderators should use slash commands. The forum buttons use runtime role checks directly.
+
 ## Character submissions and slots (TEST)
 
 /ledger-character submit collects a character name, D&D Beyond sheet URL, server message links for stats and an RP sample, chosen stat set (1–3), and equipment-or-gold selection. /ledger-character list shows your submissions and correction requests. /ledger-character slots shows approved characters, earned slots, first-approval date and remaining requirements.

@@ -5,6 +5,8 @@ import { countWords } from './activity.js';
 import { ProxyTracker } from './proxy.js';
 import { commands, handleCommand } from './commands.js';
 import { UserError } from './admin.js';
+import { ReviewPosts } from './review-posts.js';
+import { reviewInteraction } from './review-interactions.js';
 
 const { DISCORD_TOKEN, DISCORD_GUILD_ID, TEST_CHANNEL_ID } = process.env;
 const savedTestMode = process.env.AP_TEST_MODE === 'true';
@@ -26,6 +28,16 @@ const client = new Client({
   partials: [Partials.Message, Partials.Channel],
   allowedMentions: { parse: [] }
 });
+if(ledger&&process.env.CHARACTERS_CHANNEL_ID&&process.env.MODERATOR_ROLE_IDS){
+  ledger.reviewPosts=new ReviewPosts(pool,client,DISCORD_GUILD_ID,process.env.CHARACTERS_CHANNEL_ID,process.env.MODERATOR_ROLE_IDS.split(',')[0].trim());
+}
+let publishing=false;
+async function publishPending(){
+  if(publishing||!ledger?.reviewPosts||!client.isReady())return;
+  publishing=true;
+  try{await ledger.reviewPosts.retryPending();}catch{console.error('Character-review publishing could not complete.');}finally{publishing=false;}
+}
+const publicationTimer=setInterval(()=>{void publishPending();},60000);
 const recent = new Map();
 const tracker = new ProxyTracker();
 const bracketLookups = new Set();
@@ -55,12 +67,18 @@ client.once(Events.ClientReady, async () => {
     await report(savedTestMode ? '**Saved AP test is online.** Matched Tupper messages in this channel earn TEST credit. Use /ledger-ap to check your balance. Real progression is unaffected.' : '**Ledger ownership test is online.** No AP is awarded.');
   }
   catch { console.error('Cannot post startup greeting; check test-channel permissions.'); }
+  void publishPending();
 });
 client.on(Events.InteractionCreate, async interaction => {
+  if(interaction.isButton()||interaction.isModalSubmit()){
+    await reviewInteraction(interaction,ledger,DISCORD_GUILD_ID);return;
+  }
   if (!interaction.isChatInputCommand() || !commands.some(c => c.name === interaction.commandName)) return;
   try {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    if (interaction.guildId !== DISCORD_GUILD_ID || interaction.channelId !== TEST_CHANNEL_ID) return await interaction.editReply('Use this test command in the configured bot-testing channel.');
+    const characterCommand=['ledger-character','ledger-review','ledger-approve','ledger-reject'].includes(interaction.commandName);
+    const inReviews=process.env.CHARACTERS_CHANNEL_ID&&(interaction.channelId===process.env.CHARACTERS_CHANNEL_ID||interaction.channel?.parentId===process.env.CHARACTERS_CHANNEL_ID);
+    if (interaction.guildId !== DISCORD_GUILD_ID || (interaction.channelId !== TEST_CHANNEL_ID&&!(characterCommand&&inReviews))) return await interaction.editReply('Use this command in bot-testing, or use character commands inside the characters review forum.');
     if (!ledger) return await interaction.editReply('Saved AP testing is disabled.');
     await interaction.editReply({ content: await handleCommand(interaction,ledger,DISCORD_GUILD_ID), allowedMentions: { parse: [] } });
   } catch (error) { console.error('Ledger command did not complete.'); if (interaction.deferred) await interaction.editReply({ content: error instanceof UserError ? error.message : 'The command could not be confirmed. Check your balance or audit history before retrying.', allowedMentions: { parse: [] } }).catch(() => {}); }
@@ -123,5 +141,5 @@ client.on(Events.MessageDelete, async message => {
 });
 const cleanup = setInterval(() => { tracker.expire(Date.now()); for (const [id, item] of recent) if (item.expires < Date.now()) recent.delete(id); }, 30000);
 client.on(Events.Error, () => console.error('Discord connection error.'));
-for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { clearInterval(cleanup); for (const timer of timers) clearTimeout(timer); client.destroy(); process.exit(0); });
+for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { clearInterval(cleanup); clearInterval(publicationTimer); for (const timer of timers) clearTimeout(timer); client.destroy(); process.exit(0); });
 client.login(DISCORD_TOKEN).catch(() => { console.error('Discord login failed. Check the token and enabled intents.'); process.exit(1); });
