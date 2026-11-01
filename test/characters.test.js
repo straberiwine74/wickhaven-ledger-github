@@ -4,13 +4,20 @@ import { PGlite } from '@electric-sql/pglite';
 import { TestLedger } from '../src/store.js';
 import { characterInput,slotState } from '../src/characters.js';
 import { handleCharacterCommand } from '../src/character-commands.js';
+import { characterCommands } from '../src/character-commands.js';
 const guild='1566203164464513104';
 const link=`https://discord.com/channels/${guild}/1566206538563981483/1566255808382238942`;
-const input=(name,id)=>({name,sheet:`https://www.dndbeyond.com/characters/${id}`,stats:link,sample:link,set:1,resources:'equipment'});
+const input=(name,id)=>({name,sheet:`https://www.dndbeyond.com/characters/${id}`,stats:link,set:1,resources:'equipment'});
+
+test('submission needs no RP sample and the slash command no longer requests one',()=>{
+  assert.equal(characterInput(input('Lyra',123),guild).sample,'');
+  const submit=characterCommands.find(c=>c.name==='ledger-character').options.find(c=>c.name==='submit');
+  assert.equal(submit.options.some(o=>o.name==='sample'),false);
+});
 
 test('character submission validates sources, message guild, selected set and resources',()=>{
   assert.equal(characterInput(input('Lyra',123),guild).sheetId,'123');
-  for(const patch of [{sheet:'https://dndbeyond.com.evil.test/characters/123'},{sheet:'https://x:dndbeyond.com@evil.test/characters/123'},{stats:link.replace(guild,'999999999999999999')},{set:4},{resources:'mixed'},{sample:'not a link'}])assert.throws(()=>characterInput({...input('Lyra',123),...patch},guild));
+  for(const patch of [{sheet:'https://dndbeyond.com.evil.test/characters/123'},{sheet:'https://x:dndbeyond.com@evil.test/characters/123'},{stats:link.replace(guild,'999999999999999999')},{set:4},{resources:'mixed'}])assert.throws(()=>characterInput({...input('Lyra',123),...patch},guild));
 });
 test('D&D Beyond share links retain their complete URL and stable character identity',()=>{
   const sheet='https://www.dndbeyond.com/characters/173040985/hE5rqg';

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
 import { Collection,ChannelType } from 'discord.js';
 import { TestLedger } from '../src/store.js';
-import { ReviewPosts,reviewPayload } from '../src/review-posts.js';
+import { ReviewPosts,reviewPayload,reviewKey } from '../src/review-posts.js';
 import { reviewInteraction,canReview } from '../src/review-interactions.js';
 
 const g='1566203164464513104',f='1566205298870325288',r='1566212934449893457';
@@ -20,7 +20,7 @@ function transport(){
     const messages=new Collection();
     const starter={id,author:{id:'bot'},...normalize(data.message),edit:async payload=>Object.assign(starter,normalize(payload))};
     messages.set(id,starter);
-    const thread={id,name:data.name,parentId:f,ownerId:'bot',archived:false,fetchStarterMessage:async()=>starter,messages:{fetch:async()=>messages},send:async payload=>{
+    const thread={id,name:data.name,parentId:f,ownerId:'bot',archived:false,setName:async name=>{thread.name=name;return thread;},fetchStarterMessage:async()=>starter,messages:{fetch:async()=>messages},send:async payload=>{
       pings++;const message={id:'ping'+pings,author:{id:'bot'},...normalize(payload)};messages.set(message.id,message);return message;
     }};
     all.set(id,thread);return thread;
@@ -35,10 +35,14 @@ test('public review creates once, mentions only moderators, updates resubmission
   try{
     await ledger.init();await ledger.characters.submit(g,'player',input);
     const url=await posts.sync('player','Ryder');assert.match(url,/discord.com\/channels/);assert.equal(discord.creates,1);
+    assert.equal(discord.all.first().name,'Ryder');
     const starter=await discord.all.first().fetchStarterMessage();
     assert.deepEqual(starter.allowedMentions,{parse:[],roles:[r],users:[]});assert.match(starter.content,new RegExp(r));
-    assert.match(starter.embeds[0].description,/Pending review/);assert.equal(starter.embeds[0].fields.length,5);
+    assert.match(starter.embeds[0].description,/Pending review/);assert.equal(starter.embeds[0].fields.length,4);
     await posts.sync('player','Ryder');assert.equal(discord.creates,1);assert.equal(discord.pings,0);
+    discord.all.first().name='Ryder [legacy-review-id]';
+    await db.query('UPDATE ledger_test_review_posts SET presentation_version=0');
+    await posts.retryPending();assert.equal(discord.all.first().name,'Ryder');assert.equal(discord.pings,0);
     await ledger.characters.submit(g,'player',{...input,set:3});
     await posts.sync('player','Ryder');assert.equal(discord.creates,1);assert.equal(discord.pings,1);
     await posts.sync('player','Ryder');assert.equal(discord.pings,1);
@@ -74,4 +78,38 @@ test('public review buttons reject nonstaff before any database decision',async(
   const interaction={customId:'char-review:approved:'+'a'.repeat(32)+':1',guildId:g,memberPermissions:{has:()=>false},member:{roles:[]},reply:async data=>{reply=data;}};
   await reviewInteraction(interaction,{},g);assert.match(reply.content,/Only administrators/);
   assert.equal(canReview({memberPermissions:{has:()=>true}}),true);
+});
+test('request changes never approves; owner resubmission re-enables staff approval on the same post',async()=>{
+  const db=new PGlite();const pool={query:db.query.bind(db),connect:async()=>({query:db.query.bind(db),release(){}})};
+  const ledger=new TestLedger(pool),discord=transport();
+  ledger.reviewPosts=new ReviewPosts(pool,discord.client,g,f,r);
+  ledger.notifications={deliver:async()=> 'sent'};
+  let sequence=0;
+  const make=(customId,user='moderator',admin=true)=>{
+    const interaction={id:String(++sequence),customId,guildId:g,user:{id:user},channel:{parentId:f},memberPermissions:{has:()=>admin},member:{roles:[]},isModalSubmit:()=>true,isButton:()=>false,editReply:async()=>{},reply:async()=>{},fields:{getTextInputValue:key=>key==='confirm'?'APPROVE':'Please fix the chosen stat set.'}};
+    interaction.deferReply=async()=>{interaction.deferred=true;};return interaction;
+  };
+  try{
+    await ledger.init();await ledger.characters.submit(g,'player',input);await ledger.reviewPosts.sync('player','Ryder');
+    let c=await ledger.characters.review(g,'player','Ryder');const key=reviewKey(c);
+    await reviewInteraction(make(`char-decision:rejected:${key}:1`),ledger,g);
+    c=await ledger.characters.review(g,'player','Ryder');assert.equal(c.status,'rejected');assert.equal(c.approved_at,null);
+    assert.equal((await ledger.characters.slots(g,'player')).approved,0);
+    let starter=await discord.all.first().fetchStarterMessage();assert.match(starter.embeds[0].description,/Changes requested/);assert.doesNotMatch(starter.embeds[0].description,/Status: Approved/);
+    let buttons=starter.components[0].toJSON().components;assert.equal(buttons[0].disabled,true);assert.equal(buttons[2].disabled,false);
+    await reviewInteraction(make(`char-resubmit:${key}:1`,'someone-else',false),ledger,g);
+    assert.equal((await ledger.characters.review(g,'player','Ryder')).status,'rejected');
+    await reviewInteraction(make(`char-resubmit:${key}:1`,'player',false),ledger,g);
+    c=await ledger.characters.review(g,'player','Ryder');assert.equal(c.status,'pending');assert.equal(c.revision,2);
+    assert.equal(discord.creates,1);assert.equal(discord.pings,1);
+    starter=await discord.all.first().fetchStarterMessage();buttons=starter.components[0].toJSON().components;
+    assert.match(starter.embeds[0].description,/Pending review/);assert.equal(buttons[0].disabled,false);assert.equal(buttons[2].disabled,true);
+    await reviewInteraction(make(`char-decision:approved:${key}:2`),ledger,g);
+    assert.equal((await ledger.characters.review(g,'player','Ryder')).status,'approved');
+    assert.equal((await ledger.characters.slots(g,'player')).approved,1);
+    // Staff can explicitly reopen a genuinely approved record for corrections.
+    await reviewInteraction(make(`char-decision:rejected:${key}:2`),ledger,g);
+    assert.equal((await ledger.characters.review(g,'player','Ryder')).status,'rejected');
+    assert.equal((await ledger.characters.slots(g,'player')).approved,0);
+  }finally{await db.close();}
 });

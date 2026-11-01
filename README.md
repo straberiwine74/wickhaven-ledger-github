@@ -1,64 +1,40 @@
-# The Wickhaven Ledger — saved TEST AP
+# The Wickhaven Ledger — TEST review workflow
 
-This update adds self-service brackets and audited staff corrections. Existing test balances are preserved. It still tracks only the test channel and does not enable real progression.
+All AP and approvals remain test records. Existing balances, submissions and Tupper registrations are preserved.
 
-## Public review forum
+## Latest changes
+- RP samples are no longer required or displayed.
+- Review post titles contain only the character name; existing titles are repaired automatically.
+- Request Changes saves Changes Requested, never Approved, and sends the player a DM containing the staff note and review-post link.
+- After editing their character, the submitting player clicks Resubmit Changes, or runs /ledger-character resubmit name:Character. The same post returns to Pending, Moderators are alerted, and Approve is enabled again.
+- Resubmit reuses saved links and options. If those changed, run submit again with the same name to replace them.
+- Only administrators and configured Moderators can approve or request changes. Only the submitting player can resubmit. Staff may explicitly return an approved record for corrections. Its original first-approval date remains historical; it does not count as currently approved until reapproved.
 
-Set CHARACTERS_CHANNEL_ID=1566205298870325288 and MODERATOR_ROLE_IDS=1566212934449893457 in Vercel Production. If there are multiple moderator roles, use comma-separated IDs; the first is the notification role. All listed roles pass runtime staff authorization. Administrators also pass.
+## Deployment
+Upload the project contents to the existing GitHub repository. No environment changes for this update. Dockerfile defaults to the website endpoint; vercel.json overrides the daemon to run src/bot.js. Do not merge those entry points.
 
-Grant Ledger View Channel, Send Messages (to create forum posts), Send Messages in Threads, Read Message History, Embed Links, and Manage Threads in the characters forum. To notify a non-mentionable Moderator role, allow Mention @everyone, @here, and All Roles specifically in that forum; the code's explicit role allowlist permits only the configured moderator role and never @everyone. Alternatively, make the notification role mentionable. Required forum tags should be disabled, or provide Pending, Approved and Changes Requested tags.
+Required Production variables: DISCORD_TOKEN, DISCORD_GUILD_ID, TEST_CHANNEL_ID, TUPPERBOX_BOT_ID, AP_TEST_MODE=true, DATABASE_URL, CHARACTERS_CHANNEL_ID, MODERATOR_ROLE_IDS. Values and secrets stay in Vercel. Never commit .env.
 
-Each submission publishes a public forum post containing its player, character-sheet link, selected stat-set and roll link, RP-sample link, resource selection, rules checklist, status and staff review buttons. No linked message or sheet content is copied. Review notes entered by staff are public; never include sensitive scene text. The separate approved-character directory is not touched.
+The characters channel must be a forum. Grant the bot View Channel, Send Messages, Send Messages in Threads, Read Message History, Embed Links and Manage Threads. To ping a non-mentionable Moderator role, grant Mention @everyone, @here, and All Roles in that forum; outgoing mentions allow only the configured moderator role. Optional forum tags: Pending, Approved, Changes Requested.
 
-The Approve button requires a public note and typing APPROVE to attest manual review. Request Changes requires a public correction note. Every button and modal rechecks staff authorization. Modal submission checks the revision, so a changed submission cannot be approved from a stale modal. Role and slot changes remain governed by the existing database review logic; no Discord roles are assigned.
+## Review controls
+/ledger-character submit collects name, sheet URL, stat-roll message link, selected set and resources. Stat links must point to this server. D&D Beyond share URLs are preserved. Staff must manually verify ownership, level 3, 2024/legacy eligibility, official WotC sources, stat selection and resource rules. No sheet or linked message is fetched by this bot.
 
-Resubmitting updates the same post, increments its revision and sends a fresh moderator alert. Completed decisions update the starter message and disable its buttons. /ledger-character publish name:Character repairs or publishes an existing submission without resubmission. Existing saved records are queued automatically at startup; queued failures retry every minute. A save can succeed even if Discord publishing fails; the private reply distinguishes that case. Database row locks and stored thread IDs prevent normal duplicate posts; recovery searches bot-created active and archived posts by a stable marker after an interrupted creation. Network failure around a Discord notification may still produce a duplicate ping; Discord and Postgres cannot commit atomically.
+/ledger-character list, slots, publish and resubmit manage existing records. /ledger-review privately shows staff the submission and latest change-request DM delivery status. Staff slash commands default to administrator-only in Discord; grant moderator command access in Server Settings > Integrations, and include their role in MODERATOR_ROLE_IDS. Buttons check that role directly. Staff notes are public on the review post.
 
-Character commands work in bot-testing and in the configured review forum and its posts. Other commands and AP tracking remain restricted to bot-testing. No public text here earns AP. Default staff slash commands remain administrator-only in Discord; enable the Moderator role in the app's command permissions if moderators should use slash commands. The forum buttons use runtime role checks directly.
+Approving consumes an available slot. There are two initial slots; the third requires 30 elapsed days, 60 AP and 20 active days; the fourth requires 60 days, 120 AP and 40 active days. The first approval starts the clock. Later approvals do not reset it. Earned slots stay unlocked after AP corrections.
 
-## Character submissions and slots (TEST)
+## DM delivery
+Change-request notifications are queued in the same transaction as the saved review. Immediate delivery is attempted and staff are told whether the DM succeeded, was blocked or remains queued. Transient failures retry with a delay, at most five attempts. Discord privacy blocks are not retried indefinitely. The request remains in the public review post and player submission list if DMs fail. Outdated requests are skipped after resubmission or a newer decision.
 
-/ledger-character submit collects a character name, D&D Beyond sheet URL, server message links for stats and an RP sample, chosen stat set (1–3), and equipment-or-gold selection. /ledger-character list shows your submissions and correction requests. /ledger-character slots shows approved characters, earned slots, first-approval date and remaining requirements.
+Existing latest Changes Requested records receive a queued notification after deployment. No arbitrary message or old approved/replaced request is sent. DMs include the correction note only, not RP message contents. No approval DM is implemented. Database and Discord cannot commit atomically; recent duplicate sends use Discord nonce deduplication, but rare duplicates after crashes cannot be ruled out.
 
-Administrators use /ledger-review, /ledger-approve and /ledger-reject. Moderator access uses MODERATOR_ROLE_IDS plus Discord integration command permissions as for adjustment commands. Approval requires verified:true and a note after manually reviewing all sources. URL format is validated; linked messages, content access, sheet ownership, level, ability scores, reactions, rules and equipment are not automatically verified. No D&D Beyond data is fetched or imported. Staff must have permission to read the submitted posts.
+## AP and registration
+/ledger-tupper register, list and remove manage a player's bracket settings; they do not approve a character. Matching uses the original Discord author, registered bracket normalization, original deletion and the Tupperbox webhook creator. Ambiguous evidence is held for review. Autoproxy supports unchanged text. Names displayed by webhooks are never treated as player identities.
 
-Two slots are initially available. A first approval starts the elapsed-time clock. The third slot requires 30 full elapsed days, 60 cumulative test AP and 20 active days. The fourth requires 60 days, 120 AP and 40 active days. Slot status and approvals evaluate these requirements on demand. Earned slots persist through subsequent AP corrections. Approvals are serialized per player and cannot exceed the available slots. Duplicate review interactions are idempotent; a sheet cannot be submitted under multiple accounts within this server. Pending submissions do not consume approved slots. Rejected submissions can be edited and resubmitted under the same name.
+Only matched Tupper messages in bot-testing earn test writing AP. 300 words = 1 AP; 4 AP/day across characters; unfinished words carry forward, but surplus after the cap is discarded. Chicago midnight defines days. /ledger-ap shows test balances. /ledger-adjust and /ledger-audit provide staff corrections and an audit trail. AP corrections do not adjust word totals or source eligibility.
 
-New tables: ledger_test_character_accounts, ledger_test_characters and ledger_test_character_reviews. Decisions record staff identity, note and date. No roles are changed. Tupper registrations remain separate and do not grant approval. Current test AP still counts regardless of approval; approval-gated live activity is future work. Do not treat these test records as a launch-ready approval system. No retirement, transfer, approved-sheet edits or approval reversal is implemented yet.
+## Limitations and checks
+No live progression, directory posting, role assignment, character retirement/transfer, Avrae departure export, gathering awards, historical replay or post-credit edit/delete reconciliation yet. Proxy correlation is not a signed ownership attestation. Padding and copied prose require human review. Restart gaps may need correction.
 
-## Setup
-Keep existing variables unchanged. AP_TEST_MODE=true and DATABASE_URL enable test storage. MODERATOR_ROLE_IDS is optional: comma-separated role IDs allowed to moderate. Administrators are allowed automatically. Enable Message Content Intent and Manage Webhooks in the testing channel.
-
-## Player commands
-- /ledger-tupper register name:Ryder prefix:R:
-- /ledger-tupper register name:Lyra prefix:L:
-- /ledger-tupper list
-- /ledger-tupper remove name:Ryder
-- /ledger-ap
-
-Omit suffix for a prefix-only Tupper. Paired and suffix-only brackets are also supported. Registering the same character name updates its brackets. Entries are per player and persist without a deployment. Prefixes may be shared by different players. Existing hard-coded Lyra brackets are no longer used; register Lyra once too.
-
-Registration normalizes original-message text. It does not change Tupperbox, approve a character, grant a slot, or verify the displayed character identity. Only the initiating Discord account can manage its entries.
-
-## Staff commands
-- /ledger-adjust player:@player change:-1 reason:Correction
-- Optional day:2026-10-31; defaults to today in America/Chicago.
-- /ledger-audit player:@player
-
-The commands default to administrator-only. For moderators, configure MODERATOR_ROLE_IDS and grant those roles the corresponding command permissions under Discord Server Settings > Integrations > The Wickhaven Ledger. Runtime authorization checks the actual member's administrator permission or configured roles.
-
-Every adjustment records moderator, target, date, before/after AP, reason and interaction ID. Duplicate interactions cannot apply twice. Daily AP must stay between zero and four. Totals and active days update from daily balances. A day is active if it has at least one AP. Undo a correction with another reasoned correction; audit entries remain.
-
-Adjustments change AP only. They do not remove unfinished words or invalidate source writing. Removing today's AP can allow later writing to earn AP again. Raw RP or adult scene text must not be put in correction reasons. Source-event and word deductions remain future work.
-
-## Storage and attribution
-Tables: ledger_test_players, ledger_test_days, ledger_test_events, ledger_test_adjustments, ledger_proxy_registrations. Store IDs, dates, counts, bracket settings and reasons, not RP text. Transactions serialize AP changes per player and unique original/proxy IDs prevent duplicate credit.
-
-Matching needs the Tupperbox webhook creator, a unique matching original in the same channel within 15 seconds, bracket-normalized text, and observed deletion. Pending bracket lookups are awaited. Autoproxy matches unchanged text. This remains correlation evidence, not a signed Tupperbox attestation. Display names are never identities. Ambiguous or missing evidence gets no automatic credit.
-
-Current limits: no historical backfill, edit/delete reconciliation, gathering AP, approval dates or real slot unlocks. Only matched proxy writing counts in TEST_CHANNEL_ID. Ordinary messages remain diagnostic-only. Edits or deletions after credit do not revise the test balance. Word counting is heuristic; moderators must review copied or padded prose. Registration is not approval and does not enforce character slots yet.
-
-## Run and deploy
-Use Node 24; npm ci, then npm test. Copy .env.example to .env for local private settings and run npm start. Never commit .env.
-
-Upload this project's contents at the GitHub repository root. Dockerfile defaults to src/web.js for website traffic, while vercel.json explicitly starts src/bot.js only in the daemon. Keep them separate. Vercel Daemons run only in production and have usage quotas. The database tables initialize automatically. No secrets are included in this package. Tests use embedded PostgreSQL; hosted behavior needs live verification.
+Run npm ci and npm test using Node 24. Tests include embedded PostgreSQL, mocked Discord publishing and DMs, and the full changes-requested/resubmit/approve sequence. Hosted behavior must still be verified after deployment.

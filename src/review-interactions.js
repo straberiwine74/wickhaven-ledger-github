@@ -1,5 +1,6 @@
 import { ActionRowBuilder,ModalBuilder,TextInputBuilder,TextInputStyle,MessageFlags } from 'discord.js';
 import { UserError } from './admin.js';
+import { notifyChanges } from './character-notifications.js';
 
 export function canReview(interaction){
   if(interaction.memberPermissions?.has(8n))return true;
@@ -8,6 +9,19 @@ export function canReview(interaction){
   return ids.some(id=>Array.isArray(roles)?roles.includes(id):roles?.cache?.has(id));
 }
 export async function reviewInteraction(interaction,ledger,guildId){
+  const resubmit=interaction.customId?.match(/^char-resubmit:([a-f0-9]{32}):(\d+)$/);
+  if(resubmit){
+    try{
+      await interaction.deferReply({flags:MessageFlags.Ephemeral});
+      if(interaction.guildId!==guildId||!ledger?.reviewPosts||interaction.channel?.parentId!==ledger.reviewPosts.forumId)throw new UserError('Use this control in the character review post.');
+      const c=await ledger.reviewPosts.byKey(resubmit[1]);
+      if(c.player_id!==interaction.user.id)throw new UserError('Only the player who submitted this character may resubmit it.');
+      await ledger.characters.resubmit(guildId,interaction.user.id,c.name,Number(resubmit[2]));
+      let notice='';try{await ledger.reviewPosts.sync(c.player_id,c.name);}catch{notice=' The public update is queued for retry.';}
+      await interaction.editReply({content:`**Resubmitted: ${c.name}**\nStatus: Pending review. Staff approval is available again.${notice}\nSaved links and starting-resource choice were reused. Use submit again if those details changed.`,allowedMentions:{parse:[]}});
+    }catch(error){await interaction.editReply({content:error instanceof UserError?error.message:'Resubmission could not be confirmed. Check the review status before retrying.',allowedMentions:{parse:[]}}).catch(()=>{});}
+    return true;
+  }
   const match=interaction.customId?.match(/^(char-review|char-decision):(approved|rejected):([a-f0-9]{32}):(\d+)$/);
   if(!match)return false;
   try{
@@ -26,11 +40,12 @@ export async function reviewInteraction(interaction,ledger,guildId){
     }
     if(kind==='char-decision'&&interaction.isModalSubmit()){
       await interaction.deferReply({flags:MessageFlags.Ephemeral});
-      if(decision==='approved'&&interaction.fields.getTextInputValue('confirm').trim()!=='APPROVE')throw new UserError('Review the sheet, stat rolls, RP sample and starting resources, then type APPROVE to confirm.');
+      if(decision==='approved'&&interaction.fields.getTextInputValue('confirm').trim()!=='APPROVE')throw new UserError('Review the sheet, stat rolls and starting resources, then type APPROVE to confirm.');
       const c=await ledger.reviewPosts.byKey(key);
       const result=await ledger.characters.decide({guildId,playerId:c.player_id,name:c.name,moderatorId:interaction.user.id,requestId:interaction.id,decision,note:interaction.fields.getTextInputValue('note'),expectedRevision:revision});
       let notice='';
       try{await ledger.reviewPosts.sync(c.player_id,c.name);}catch{notice=' The decision was saved, but the public post update is queued for retry.';}
+      if(decision==='rejected')notice+=' '+await notifyChanges(ledger,interaction.id);
       await interaction.editReply({content:`TEST review ${result.duplicate?'already recorded':decision==='approved'?'approved':'returned for changes'}.${notice}`,allowedMentions:{parse:[]}});return true;
     }
     throw new UserError('This review control is not valid.');

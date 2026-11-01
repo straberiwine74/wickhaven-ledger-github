@@ -7,6 +7,7 @@ import { commands, handleCommand } from './commands.js';
 import { UserError } from './admin.js';
 import { ReviewPosts } from './review-posts.js';
 import { reviewInteraction } from './review-interactions.js';
+import { CharacterNotifications } from './character-notifications.js';
 
 const { DISCORD_TOKEN, DISCORD_GUILD_ID, TEST_CHANNEL_ID } = process.env;
 const savedTestMode = process.env.AP_TEST_MODE === 'true';
@@ -31,11 +32,12 @@ const client = new Client({
 if(ledger&&process.env.CHARACTERS_CHANNEL_ID&&process.env.MODERATOR_ROLE_IDS){
   ledger.reviewPosts=new ReviewPosts(pool,client,DISCORD_GUILD_ID,process.env.CHARACTERS_CHANNEL_ID,process.env.MODERATOR_ROLE_IDS.split(',')[0].trim());
 }
+if(ledger)ledger.notifications=new CharacterNotifications(pool,client,DISCORD_GUILD_ID);
 let publishing=false;
 async function publishPending(){
   if(publishing||!ledger?.reviewPosts||!client.isReady())return;
   publishing=true;
-  try{await ledger.reviewPosts.retryPending();}catch{console.error('Character-review publishing could not complete.');}finally{publishing=false;}
+  try{await ledger.reviewPosts.retryPending();await ledger.notifications?.retryPending();}catch{console.error('Character-review publishing could not complete.');}finally{publishing=false;}
 }
 const publicationTimer=setInterval(()=>{void publishPending();},60000);
 const recent = new Map();
