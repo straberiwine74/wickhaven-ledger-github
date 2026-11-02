@@ -135,7 +135,9 @@ export function questView(run, knowledge=[]) {
   });
   const button=(action,[label,emoji,style])=>new ButtonBuilder().setCustomId(`quest:${run.id}:${run.revision}:${action}`).setLabel(label).setEmoji(emoji).setStyle(styles[style]??style);
   const buttons=choices.map(([a,spec])=>button(a,spec));
-  const utility=new ActionRowBuilder().addComponents(button('supplies',['Supplies & saved roll','🎒','secondary']),button('race',['Staff: test simultaneous clicks','🧪','secondary']));
+  // The staff click-protection diagnostic passed live on November 1; its button is
+  // retired. Old messages that still show it continue to work for staff.
+  const utility=new ActionRowBuilder().addComponents(button('supplies',['Supplies & saved roll','🎒','secondary']));
   const payload=message(state.scene==='review'?reviewEmbed(run,knowledge):sceneEmbed(run,knowledge),{components:[...(buttons.length?[new ActionRowBuilder().addComponents(buttons)]:[]),utility]});
   if(state.scene==='review') payload.files=suppliesView(run).files;
   return payload;
