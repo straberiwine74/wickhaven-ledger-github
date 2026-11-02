@@ -26,6 +26,18 @@ export function validateSnapshot(s) {
   return JSON.parse(JSON.stringify(s));
 }
 
+export function parseVerificationResponse(body) {
+  // Preserve numeric Discord IDs before JSON parsing, including nested data.
+  const result=JSON.parse(body.replace(/"(message_id|channel_id|author_id|guild_id)"\s*:\s*(\d+)/g,'"$1":"$2"'));
+  if (Object.hasOwn(result,'success')) {
+    requireValue(result.success === true && result.data && typeof result.data === 'object' && !Array.isArray(result.data), 'Avrae signature verification unavailable.');
+    return result.data;
+  }
+  // Also support the flat response described in Avrae's alias API docs.
+  requireValue(result && typeof result.scope === 'string', 'Avrae signature verification unavailable.');
+  return result;
+}
+
 export async function verifyExport(s, message, config, verify = async signature => {
   const response = await fetch('https://api.avrae.io/bot/signature/verify', {
     method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({signature}), signal:AbortSignal.timeout(10000)
@@ -33,7 +45,7 @@ export async function verifyExport(s, message, config, verify = async signature 
   if (!response.ok) throw new Error('Avrae signature verification unavailable.');
   // Snowflakes exceed JavaScript's safe integer range; preserve API numeric IDs.
   const body=await response.text();
-  return JSON.parse(body.replace(/"(message_id|channel_id|author_id|guild_id)"\s*:\s*(\d+)/g,'"$1":"$2"'));
+  return parseVerificationResponse(body);
 }) {
   validateSnapshot(s);
   requireValue(message.author.bot && !message.webhookId && message.author.id === config.avrae, 'Only configured Avrae exports are accepted.');

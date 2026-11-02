@@ -1,5 +1,12 @@
-Replace src/quest.js and src/quest-discord.js in your existing repository with the same-path files from this ZIP. Include test/quest.test.js. Push to GitHub main and redeploy. No installer, alias, environment or database changes.
-Commit: fix: handle optional Avrae signature guild and clarify validation errors
-Then run !depart drowned-watch again.
-Avrae guild_id is an optional cache lookup; signed channel/player/invocation and actual Discord guild checks remain enforced. Supplied contradictory guilds still fail. Distinct errors now identify each signature mismatch. Hosted behavior is unverified and the actual API response for the reported rejection has not been captured.
-Source: https://github.com/avrae/avrae/blob/master/aliasing/api/functions.py
+Verified Avrae response-envelope fix
+
+Cause confirmed by a live request to Avrae public signature verification: HTTP 200, success true, data.scope SERVER_ALIAS, matching exported invocation/player/channel, marker 7. Existing code incorrectly read scope from the outer object rather than data.
+
+Extract this ZIP into your existing repository. Replace src/quest.js and include the updated test/quest.test.js. Push to GitHub main and let Vercel redeploy. No installer, alias, environment-variable or database changes. Existing saved progress is preserved.
+
+Commit message:
+fix: unwrap Avrae signature verification response
+
+After deploy run !depart drowned-watch and share the Ledger response.
+
+10 quest tests passed locally, including the actual service response envelope, exact large Discord IDs, failed response rejection, fresh end-to-end wrapped verification and existing state/reward protections. The supplied signature was verified live, but is old and must not be used to test departure freshness; run a new departure. End-to-end hosted departure still awaits confirmation. The optional guild correction is retained; it was a separate defect, not the cause of the alias-type rejection.

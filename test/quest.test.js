@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
 import { TestLedger } from '../src/store.js';
-import { QuestStore, validateSnapshot, verifyExport, transition } from '../src/quest.js';
+import { QuestStore, validateSnapshot, verifyExport, transition, parseVerificationResponse } from '../src/quest.js';
 import { questView, departureFailure } from '../src/quest-discord.js';
 
 test('departure diagnostics explain known errors and hide unexpected private details',()=>{
@@ -87,5 +87,23 @@ test('verification preserves numeric snowflake IDs returned by the Avrae API',as
   globalThis.fetch=async()=>({ok:true,text:async()=>`{"scope":"SERVER_ALIAS","user_data":7,"author_id":${player},"channel_id":${channel},"guild_id":${guild},"message_id":${invocation},"timestamp":${Date.now()/1000}}`});
   try {
     await verifyExport(snapshot(),{author:{id:avrae,bot:true},guildId:guild,channelId:channel,createdTimestamp:Date.now()},{guild,channel,avrae});
+  } finally {globalThis.fetch=prior;}
+});
+test('actual Avrae success envelope is unwrapped without losing snowflake precision',()=>{
+  const body='{"success":true,"data":{"message_id":1566626688601956415,"channel_id":1566206434562154666,"author_id":1171291353142018068,"timestamp":1793583309.079,"scope":"SERVER_ALIAS","user_data":7,"workshop_collection_id":"6ae7d8170f892417d817540d"}}';
+  const proof=parseVerificationResponse(body);
+  assert.equal(proof.scope,'SERVER_ALIAS');assert.equal(proof.message_id,'1566626688601956415');assert.equal(proof.channel_id,'1566206434562154666');assert.equal(proof.author_id,'1171291353142018068');
+  assert.throws(()=>parseVerificationResponse('{"success":false,"data":{"scope":"SERVER_ALIAS"}}'),/unavailable/);
+  assert.throws(()=>parseVerificationResponse('{"success":true,"data":null}'),/unavailable/);
+});
+test('default verification accepts a fresh wrapped service response and rejects failed service responses',async()=>{
+  const prior=globalThis.fetch;
+  const body=()=>`{"success":true,"data":{"scope":"SERVER_ALIAS","user_data":7,"author_id":${player},"channel_id":${channel},"message_id":${invocation},"timestamp":${Date.now()/1000}}}`;
+  globalThis.fetch=async()=>({ok:true,text:async()=>body()});
+  const m={author:{id:avrae,bot:true},guildId:guild,channelId:channel,createdTimestamp:Date.now()},config={guild,channel,avrae};
+  try {
+    await verifyExport(snapshot(),m,config);
+    globalThis.fetch=async()=>({ok:true,text:async()=>'{"success":false,"data":null}'});
+    await assert.rejects(verifyExport(snapshot(),m,config),/unavailable/);
   } finally {globalThis.fetch=prior;}
 });
