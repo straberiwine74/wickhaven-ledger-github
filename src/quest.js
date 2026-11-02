@@ -40,7 +40,16 @@ export async function verifyExport(s, message, config, verify = async signature 
   requireValue(s.guild === config.guild && s.channel === config.channel && message.guildId === s.guild && message.channelId === s.channel, 'Wrong export channel/server.');
   requireValue(Date.now() - message.createdTimestamp >= -5000 && Date.now() - message.createdTimestamp < 300000, 'Export expired. Run departure again.');
   const proof = await verify(s.signature);
-  requireValue(proof.scope === 'SERVER_ALIAS' && proof.user_data === 7 && String(proof.author_id) === s.player && String(proof.channel_id) === s.channel && String(proof.guild_id) === s.guild && String(proof.message_id) === s.invocation, 'Use the installed server departure alias; personal aliases are not accepted.');
+  requireValue(proof.scope === 'SERVER_ALIAS', 'Avrae did not verify a server-alias invocation.');
+  requireValue(proof.user_data === 7, 'Avrae signature has the wrong departure marker.');
+  requireValue(String(proof.author_id) === s.player, 'Signed player does not match the export.');
+  requireValue(String(proof.channel_id) === s.channel, 'Signed channel does not match the export.');
+  requireValue(String(proof.message_id) === s.invocation, 'Signed invocation does not match the export.');
+  // Guild is cache-derived, not packed into Avrae's signature; the API may
+  // omit it. The signed channel is already matched to the actual Discord
+  // message channel, whose guild was checked above. Reject a contradictory
+  // guild when supplied, without requiring this optional API field.
+  requireValue(proof.guild_id == null || String(proof.guild_id) === s.guild, 'Verification server does not match the export.');
   const age = Date.now()/1000 - proof.timestamp;
   requireValue(Number.isFinite(age) && age >= -5 && age < 300, 'Signed departure expired.');
   return s;

@@ -1,10 +1,5 @@
-Departure diagnostic update
-
-Replace src/quest-discord.js in your existing repository with the file at the same path in this ZIP. The test/quest.test.js file contains the updated local tests and may also be uploaded.
-Push to GitHub main and let Vercel redeploy. No installer, environment-variable changes, database changes or alias changes are needed. Existing quest progress is preserved.
-
-Commit message:
-fix: show departure validation failure stages
-
-Then run !depart drowned-watch again and share the Ledger response.
-This update improves diagnostics; it does not claim to fix the underlying rejection.
+Replace src/quest.js and src/quest-discord.js in your existing repository with the same-path files from this ZIP. Include test/quest.test.js. Push to GitHub main and redeploy. No installer, alias, environment or database changes.
+Commit: fix: handle optional Avrae signature guild and clarify validation errors
+Then run !depart drowned-watch again.
+Avrae guild_id is an optional cache lookup; signed channel/player/invocation and actual Discord guild checks remain enforced. Supplied contradictory guilds still fail. Distinct errors now identify each signature mismatch. Hosted behavior is unverified and the actual API response for the reported rejection has not been captured.
+Source: https://github.com/avrae/avrae/blob/master/aliasing/api/functions.py

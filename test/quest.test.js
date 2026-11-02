@@ -22,6 +22,10 @@ test('export requires authentic fresh server-alias context, not user JSON or per
   const s=snapshot(),m={author:{id:avrae,bot:true},guildId:guild,channelId:channel,createdTimestamp:Date.now()};
   const config={guild,channel,avrae},proof={scope:'SERVER_ALIAS',user_data:7,author_id:player,channel_id:channel,guild_id:guild,message_id:invocation,timestamp:Date.now()/1000};
   await verifyExport(s,m,config,async()=>proof);
+  await verifyExport(s,m,config,async()=>({...proof,guild_id:null}));
+  const withoutGuild={...proof};delete withoutGuild.guild_id;
+  await verifyExport(s,m,config,async()=>withoutGuild);
+  await assert.rejects(verifyExport(s,m,config,async()=>({...proof,guild_id:avrae})),/Verification server/);
   for(const change of [{scope:'PERSONAL_ALIAS'},{author_id:avrae},{message_id:'wrong'},{user_data:0},{timestamp:0}]) await assert.rejects(verifyExport(s,m,config,async()=>({...proof,...change})));
   await assert.rejects(verifyExport(s,{...m,webhookId:'x'},config,async()=>proof));
   await assert.rejects(verifyExport(s,{...m,author:{id:player,bot:false}},config,async()=>proof));

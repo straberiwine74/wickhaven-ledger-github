@@ -3,6 +3,7 @@ import { QuestStore, verifyExport } from './quest.js';
 
 export function departureFailure(stage,error) {
   const safe=new Set(['Departure data was truncated or malformed.','Unsupported snapshot or quest.','Use an imported D&D Beyond character.','Invalid HP.','Declare and review actual passive Perception.','A declared loadout is required (maximum 20 entries).','Invalid loadout item.','Combine duplicate inventory entries.','Invalid coins.','Missing Avrae signature.','Snapshot too large. Reduce manifest entries.','Only configured Avrae exports are accepted.','Wrong export channel/server.','Export expired. Run departure again.','Avrae signature verification unavailable.','Use the installed server departure alias; personal aliases are not accepted.','Signed departure expired.','This imported sheet needs Ledger TEST approval first.']);
+  for(const message of ['Avrae did not verify a server-alias invocation.','Avrae signature has the wrong departure marker.','Signed player does not match the export.','Signed channel does not match the export.','Signed invocation does not match the export.','Verification server does not match the export.']) safe.add(message);
   const detail=safe.has(error?.message)?error.message:'The check did not complete; staff can inspect the daemon log.';
   return `Departure stopped at **${stage}**. ${detail}\nNo reset or additional reward was applied. Existing saved progress is preserved.`;
 }
