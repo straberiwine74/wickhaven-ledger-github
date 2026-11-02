@@ -1,16 +1,17 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
-import { QuestStore, verifyExport, tideBoxOffered } from './quest.js';
+import { QuestStore, verifyExport } from './quest.js';
+import { questOf, choicesFor } from './quest-engine.js';
+import { SKILLS, checksUsed } from './quest-schema.js';
 import { resourceReceipt, hasResourceChanges, resourceDelta } from './quest-resources.js';
 import { runClickDiagnostic } from './quest-race.js';
 import { canReview } from './review-interactions.js';
 import { card, message, notice, clean, signed, fitLines } from './ui.js';
 
-const QUEST='Drowned Watch';
 const coinKeys=['pp','gp','ep','sp','cp'];
-const skillLabel={athletics:'Athletics',stealth:'Stealth',investigation:'Investigation',perception:'Perception'};
+const questName=run=>{try{return questOf(run).name;}catch{return 'Expedition';}};
 const title=s=>s[0].toUpperCase()+s.slice(1);
 const observation=k=>'• '+title(k.replaceAll('-',' '));
-const runFooter=run=>`${QUEST} • Run ${String(run.id).slice(0,8)} • Step ${run.revision}`;
+const runFooter=run=>`${questName(run)} • Run ${String(run.id).slice(0,8)} • Step ${run.revision}`;
 const coinLine=c=>coinKeys.filter(k=>c?.[k]).map(k=>`**${c[k]}** ${k}`).join(' · ')||'none';
 
 export function changeSummary(run) {
@@ -26,7 +27,7 @@ export function rollLine(roll) {
   if(!roll) return null;
   const face=roll.total-roll.modifier;
   const dice=roll.dice.length>1?`${roll.dice.join(' / ')} → **${face}**`:`**${face}**`;
-  return `${skillLabel[roll.skill]??title(roll.skill)}: d20 ${dice} ${roll.modifier<0?'−':'+'} ${Math.abs(roll.modifier)} = **${roll.total}** — ${roll.success?'✅ Success':'❌ Fail forward'}`;
+  return `${roll.label??SKILLS[roll.skill]??title(roll.skill)}: d20 ${dice} ${roll.modifier<0?'−':'+'} ${Math.abs(roll.modifier)} = **${roll.total}** — ${roll.success?'✅ Success':'❌ Fail forward'}`;
 }
 
 export function suppliesView(run) {
@@ -52,7 +53,9 @@ const safeMessages=new Set(['Departure data was truncated or malformed.','Unsupp
   'Avrae did not verify a server-alias invocation.','Avrae signature has the wrong departure marker.','Signed player does not match the export.','Signed channel does not match the export.','Signed invocation does not match the export.','Verification server does not match the export.',
   'Invalid carried bags.','Invalid bag item.','Too many carried item entries.','Invalid expedition coin source.','Invalid reconciliation reference.','Recover HP before starting a new expedition.','Reconcile the previous expedition receipt before a new departure.','No matching completed bag expedition receipt.','Exported bags, HP or currency do not match the ending receipt.']);
 export function departureFailure(stage,error) {
-  const detail=safeMessages.has(error?.message)?error.message:'The check did not complete. Staff can inspect the bot log.';
+  const m=String(error?.message??'');
+  const safe=safeMessages.has(m)||/^Invalid [A-Za-z ]{2,40}\.$/.test(m)||/^This character export has no [A-Za-z ]{2,40}\./.test(m)||['This quest is not available.','Departure data is missing the full character sheet.'].includes(m);
+  const detail=safe?m:'The check did not complete. Staff can inspect the bot log.';
   return notice('⛔ Departure stopped',`**${detail}**`,'danger',[
     {name:'Stopped at',value:title(stage),inline:true},
     {name:'Your progress',value:'Nothing was reset and no reward was given. Saved progress is preserved.',inline:true}
@@ -64,12 +67,18 @@ export const lowHp=s=>s.hp>0&&s.hp*2<=s.maxHp;
 
 export function reviewEmbed(run,knowledge=[]) {
   const s=run.snapshot,low=lowHp(s),fields=[];
-  if(low) fields.push({name:'⚠️ Low HP',value:'You can still depart, but consider resting in Avrae first, then run `!depart drowned-watch` again.'});
+  if(low) fields.push({name:'⚠️ Low HP',value:`You can still depart, but consider resting in Avrae first, then run \`!depart ${s.quest??'drowned-watch'}\` again.`});
   fields.push({name:'❤️ Hit Points',value:`**${s.hp}** / ${s.maxHp}${s.tempHp?`\n+${s.tempHp} temporary`:''}`,inline:true});
-  fields.push({name:'👁️ Passive Perception',value:`**${s.passive}**\ndeclared — check your sheet`,inline:true});
-  fields.push({name:'💰 Coins',value:`${coinLine(s.coins)}${s.v===2?`\n${({'avrae-coinpurse':'from Avrae coin purse','bag-coin-pouch':'from bag coin pouch','none':'no coins carried'})[s.loadout.coinsSource]}`:''}`,inline:true});
-  fields.push({name:'🎲 Skills',value:Object.keys(skillLabel).map(k=>{const v=s.skills[k];return `${skillLabel[k]} **${signed(v.mod)}**${v.adv===true?' (adv)':v.adv===false?' (dis)':''}`;}).join(' · ')});
-  const groups=s.v===2?s.loadout.bags.map(b=>b[0]):[null];
+  fields.push({name:'👁️ Passive Perception',value:`**${s.passive}**\n${s.passiveSource==='computed'?'from your Perception bonus':'declared — check your sheet'}`,inline:true});
+  fields.push({name:'💰 Coins',value:`${coinLine(s.coins)}${s.v>=2?`\n${({'avrae-coinpurse':'from Avrae coin purse','bag-coin-pouch':'from bag coin pouch','none':'no coins carried'})[s.loadout.coinsSource]}`:''}`,inline:true});
+  const adv=v=>v.adv===true?' (adv)':v.adv===false?' (dis)':'';
+  if(s.v===3) {
+    fields.push({name:'🎲 Skills',value:Object.keys(SKILLS).map(k=>`${SKILLS[k]} **${signed(s.skills[k].mod)}**${adv(s.skills[k])}`).join(' · ')});
+    fields.push({name:'🛡️ Saving throws',value:Object.entries(s.saves).map(([k,v])=>`${k.toUpperCase()} **${signed(v.mod)}**${adv(v)}`).join(' · '),inline:true});
+    fields.push({name:'📊 Level',value:`**${s.level}**`,inline:true});
+  } else fields.push({name:'🎲 Skills',value:Object.keys(s.skills).map(k=>`${SKILLS[k]??title(k)} **${signed(s.skills[k].mod)}**${adv(s.skills[k])}`).join(' · ')});
+  try {fields.push({name:'🧭 This expedition may test',value:checksUsed(questOf(run)).join(' · ')});} catch {}
+  const groups=s.v>=2?s.loadout.bags.map(b=>b[0]):[null];
   // Discord caps a whole embed at 6000 characters; share an inventory budget across bags.
   const budget=Math.min(1024,Math.floor(3000/Math.max(1,Math.min(groups.length,12))));
   for(const bag of groups.slice(0,12)) {
@@ -78,7 +87,7 @@ export function reviewEmbed(run,knowledge=[]) {
   }
   if(knowledge.length) fields.push({name:'📜 Known observations',value:fitLines(knowledge.map(observation))});
   return card({
-    title:`${QUEST} — Departure Review`,
+    title:`${questName(run)} — Departure Review`,
     url:`https://www.dndbeyond.com/characters/${s.character.slice(7)}`,
     description:`**${clean(s.name)}** is ready to set out. Review everything below. **Confirming locks this expedition.**\n*TEST only: no AP, gold, or sheet write-back.*`,
     tone:low?'warning':'info',fields,
@@ -86,46 +95,46 @@ export function reviewEmbed(run,knowledge=[]) {
   });
 }
 
-const scenes={
-  shore:{title:'🌊 The Shore',tone:'shore'},
-  landing:{title:'🗼 The Landing',tone:'landing'},
+const builtIn={
   town:{title:'🏘️ Back in Wickhaven',tone:'town'},
   complete:{title:'✅ Expedition Complete',tone:'success'},
+  downed:{title:'🩸 Carried Home',tone:'danger'},
   cancelled:{title:'Departure Discarded',tone:'neutral'}
 };
-const rollPrefix=/^(athletics|stealth|investigation|perception): [^\n]*\n/;
+const sceneInfo=run=>{try{return questOf(run).scenes[run.state.scene]??builtIn[run.state.scene];}catch{return builtIn[run.state.scene]??{title:run.state.scene,tone:'info'};}};
+const rollPrefix=/^(athletics|stealth|investigation|perception): [^\n]*\n/; // pre-engine saved runs
 export function sceneEmbed(run,knowledge=[]) {
-  const s=run.snapshot,state=run.state,scene=scenes[state.scene];
-  const pending=state.scene==='complete'&&hasResourceChanges(run);
+  const s=run.snapshot,state=run.state,scene=sceneInfo(run);
+  const pending=['complete','downed'].includes(state.scene)&&hasResourceChanges(run);
   const fields=[];
-  if(state.roll&&['landing','complete'].includes(state.scene)) fields.push({name:'🎲 Approach roll',value:rollLine(state.roll)});
+  if(state.roll&&!['review','town','cancelled'].includes(state.scene)) fields.push({name:'🎲 Last roll',value:rollLine(state.roll)});
   if(!['cancelled'].includes(state.scene)) {
     fields.push({name:'❤️ Hit Points',value:`**${state.hp}** / ${s.maxHp}${state.tempHp?` (+${state.tempHp})`:''}`,inline:true});
     fields.push({name:'💰 Coins',value:coinLine(state.coins),inline:true});
   }
   if(state.scene==='town') fields.push({name:'⏸️ Expedition paused',value:'Your progress, discoveries, and supplies stay locked until you return.'});
   if(pending) fields.push({name:'📦 Copy into Avrae',value:`**${changeSummary(run)}**\nUpdate your bags, HP, or coins in Avrae, then verify with:\n\`!depart reconcile ${run.id}\`\nNew expeditions stay locked until this matches.`});
-  else if(state.scene==='complete') fields.push({name:'📦 Supplies',value:'No changes. Nothing to copy back to Avrae.'});
+  else if(['complete','downed'].includes(state.scene)) fields.push({name:'📦 Supplies',value:'No changes. Nothing to copy back to Avrae.'});
   if(knowledge.length) fields.push({name:'📜 Known observations',value:fitLines(knowledge.map(observation))});
   return card({
-    title:`${QUEST} — ${scene.title}`,
+    title:`${questName(run)} — ${scene.title}`,
     description:`**${clean(s.name)}**\n${String(state.text??'').replace(rollPrefix,'')}`,
     tone:pending?'warning':scene.tone,fields,footer:runFooter(run)
   });
 }
 
-const buttonSpecs={
-  confirm:['Confirm loadout','✅',ButtonStyle.Success],cancel:['Discard departure','🗑️',ButtonStyle.Danger],
-  climb:['Climb the exposed stairs','🧗',ButtonStyle.Primary],sneak:['Time the culvert crossing','🌊',ButtonStyle.Primary],study:['Study the harbor marks','🔎',ButtonStyle.Primary],
-  finish:['Record findings & return','📜',ButtonStyle.Success],tidebox:['Leave 1 gp in the tide-box (spends 1 gp)','🪙',ButtonStyle.Secondary],
-  retreat:['Return to town','↩️',ButtonStyle.Secondary],resume:['Return to the Watch','🗼',ButtonStyle.Primary]
-};
+const styles={primary:ButtonStyle.Primary,secondary:ButtonStyle.Secondary,success:ButtonStyle.Success,danger:ButtonStyle.Danger};
+const builtInButtons={confirm:['Confirm loadout','✅','success'],cancel:['Discard departure','🗑️','danger']};
 export function questView(run, knowledge=[]) {
   const state=run.state;
-  const choices={review:['confirm','cancel'],shore:['climb','sneak','study','retreat'],landing:['finish',...(tideBoxOffered(run)?['tidebox']:[]),'retreat'],town:['resume'],complete:[],cancelled:[]}[state.scene];
-  const button=(action,[label,emoji,style])=>new ButtonBuilder().setCustomId(`quest:${run.id}:${run.revision}:${action}`).setLabel(label).setEmoji(emoji).setStyle(style);
-  const buttons=choices.map(a=>button(a,buttonSpecs[a]));
-  const utility=new ActionRowBuilder().addComponents(button('supplies',['Supplies & saved roll','🎒',ButtonStyle.Secondary]),button('race',['Staff: test simultaneous clicks','🧪',ButtonStyle.Secondary]));
+  const choices=choicesFor(run,knowledge).map(c=>{
+    if(builtInButtons[c.id]) return [c.id,builtInButtons[c.id]];
+    if(c.id==='resume') {let q;try{q=questOf(run);}catch{}return ['resume',[`Return to the ${q?.name??'expedition'}`,q?.emoji??'🧭','primary']];}
+    return [c.id,[c.label,c.emoji??'▶️',c.style??(c.check?'primary':'secondary')]];
+  });
+  const button=(action,[label,emoji,style])=>new ButtonBuilder().setCustomId(`quest:${run.id}:${run.revision}:${action}`).setLabel(label).setEmoji(emoji).setStyle(styles[style]??style);
+  const buttons=choices.map(([a,spec])=>button(a,spec));
+  const utility=new ActionRowBuilder().addComponents(button('supplies',['Supplies & saved roll','🎒','secondary']),button('race',['Staff: test simultaneous clicks','🧪','secondary']));
   const payload=message(state.scene==='review'?reviewEmbed(run,knowledge):sceneEmbed(run,knowledge),{components:[...(buttons.length?[new ActionRowBuilder().addComponents(buttons)]:[]),utility]});
   if(state.scene==='review') payload.files=suppliesView(run).files;
   return payload;
@@ -179,7 +188,7 @@ export async function installQuests(client,pool,config) {
       await interaction.editReply(questView(run,await store.knowledge(run)));
     } catch(error) {
       console.error('Quest interaction could not complete; inspect persisted state before retrying.');
-      if(interaction.deferred) await interaction.editReply(notice('That choice couldn\u2019t be confirmed','These buttons may belong to another player, or the choice is no longer available. Run `!depart drowned-watch` to bring back your saved expedition. Nothing was reset.','danger')).catch(()=>{});
+      if(interaction.deferred) await interaction.editReply(notice('That choice couldn\u2019t be confirmed','These buttons may belong to another player, or the choice is no longer available. Run `!depart` with the same quest code to bring back your saved expedition. Nothing was reset.','danger')).catch(()=>{});
     }
   });
   return store;

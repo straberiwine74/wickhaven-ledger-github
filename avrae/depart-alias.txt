@@ -1,0 +1,88 @@
+embed <drac2>
+c = character()
+args = &ARGS&
+reconcile = None
+quest = None
+allowed = "abcdefghijklmnopqrstuvwxyz0123456789-"
+if len(args) == 2 and args[0] == "reconcile":
+    reconcile = args[1]
+    quest = "reconcile"
+elif len(args) == 1 and 2 <= len(args[0]) <= 40 and not any(ch not in allowed for ch in args[0].lower()):
+    quest = args[0].lower()
+else:
+    err("Use !depart <quest code> (for example !depart drowned-watch) or !depart reconcile <receipt-id>.")
+
+# Read Bags Rewritten's stored character data without invoking its mutating helpers.
+raw = load_yaml(c.get_cvar("bags", "null"))
+if raw is None:
+    err("No Bags Rewritten inventory found. Run !bag on this character first. No declared-inventory fallback is used.")
+selected = load_json(c.get_cvar("ledger_carried_bags", "null"))
+if not selected:
+    err('Choose carried bags first, for example: !cvar ledger_carried_bags ["Backpack"]')
+if len(set(selected)) != len(selected):
+    err("Choose each carried bag only once.")
+names = [b[0] for b in raw]
+if len(set(names)) != len(names):
+    err("Duplicate bag names found. Give bags unique names using !bag before departing.")
+if any(n not in names for n in selected):
+    err("A selected carried bag no longer exists. Check !bag and ledger_carried_bags.")
+rates = load_yaml(get_svar("coinRates") or c.get_cvar("coinRates", "[]"))
+if rates and rates != {"pp": 0.1, "gp": 1, "ep": 2, "sp": 10, "cp": 100}:
+    err("Custom Baglib currencies are not supported by this departure adapter.")
+pouch_name = get_svar("coinPouchName") or c.get_cvar("coinPouchName", "Coin Pouch")
+pouches = [b for b in raw if b[0] == pouch_name]
+coin_keys = ["pp", "gp", "ep", "sp", "cp"]
+p = c.coinpurse
+coins = {"pp": p.pp, "gp": p.gp, "ep": p.ep, "sp": p.sp, "cp": p.cp}
+coin_source = "avrae-coinpurse"
+if pouches:
+    coins = {k: pouches[0][1].get(k, 0) if pouch_name in selected else 0 for k in coin_keys}
+    coin_source = "bag-coin-pouch" if pouch_name in selected else "none"
+bags = [[b[0], {k: v for k, v in b[1].items() if not (b[0] == pouch_name and k in coin_keys)}] for b in raw if b[0] in selected]
+
+# Full character sheet: 18 skills, 6 ability checks, 6 saves, 6 scores, level.
+skill_names = ["acrobatics", "animalHandling", "arcana", "athletics", "deception", "history", "insight", "intimidation", "investigation", "medicine", "nature", "perception", "performance", "persuasion", "religion", "sleightOfHand", "stealth", "survival"]
+abilities = {"str": "strength", "dex": "dexterity", "con": "constitution", "int": "intelligence", "wis": "wisdom", "cha": "charisma"}
+sk = {}
+ck = {}
+adv = {}
+for k, v in c.skills:
+    if k in skill_names:
+        sk[k] = v.value
+        if v.adv is not None:
+            adv[k] = v.adv
+    for short, full in abilities.items():
+        if k == full:
+            ck[short] = v.value
+            if v.adv is not None:
+                adv["check." + short] = v.adv
+sv = {}
+for short in abilities:
+    s = c.saves.get(short)
+    sv[short] = s.value
+    if s.adv is not None:
+        adv["save." + short] = s.adv
+st = c.stats
+ab = {"str": st.strength, "dex": st.dexterity, "con": st.constitution, "int": st.intelligence, "wis": st.wisdom, "cha": st.charisma}
+missing = [k for k in skill_names if k not in sk] + [k for k in abilities if k not in ck]
+if missing:
+    err("Your Avrae sheet is missing: " + ", ".join(missing) + ". Run !update, then depart again.")
+
+# Passive Perception: an explicit ledger_passive_perception cvar wins; otherwise 10 + Perception (+5/-5 for advantage/disadvantage).
+passive = c.get_cvar("ledger_passive_perception")
+passive_source = "declared"
+if passive is None:
+    passive = 10 + sk["perception"] + (5 if adv.get("perception") == True else (-5 if adv.get("perception") == False else 0))
+    passive_source = "computed"
+
+data = {"v": 3, "quest": "drowned-watch" if quest == "reconcile" else quest, "guild": str(ctx.guild.id), "channel": str(ctx.channel.id), "player": str(ctx.author.id), "invocation": str(ctx.message_id), "character": c.upstream, "name": c.name, "level": c.levels.total_level, "hp": c.hp, "maxHp": c.max_hp, "tempHp": c.temp_hp, "sk": sk, "sv": sv, "ck": ck, "ab": ab, "adv": adv, "passive": int(passive), "passiveSource": passive_source, "loadout": {"source": "bags-rewritten", "collection": "6296b723c964982e890e5315", "bags": bags, "coinsSource": coin_source}, "coins": coins, "signature": signature(7)}
+if reconcile:
+    data["reconcile"] = reconcile
+encoded = dump_json(data)
+if len(encoded) > 3800:
+    err("Carried inventory is too large to export in one message. Choose fewer carried bags or ask staff; do not hide carried equipment to fit.")
+desc = "```json\n" + encoded + "\n```"
+</drac2>
+-title "BTLL departure v1"
+-desc {{dump_json(desc).replace("\\n", "\n")}}
+-footer "Full sheet + selected carried bags. Review before confirming."

@@ -98,10 +98,10 @@ test('tide-box offering is explicit, bag-runs only, spends exactly 1 gp once and
   assert.equal(tideBoxOffered(run),true);
   assert.ok(questView(run).components[0].components.some(b=>b.data.custom_id.endsWith(':tidebox')));
   const paid=transition(run,'tidebox');assert.equal(paid.coins.gp,3);assert.equal(paid.scene,'landing');assert.ok(paid.facts.includes('tide-rota'));assert.equal(run.state.coins.gp,4);
-  const after={...run,state:paid};assert.equal(tideBoxOffered(after),false);assert.throws(()=>transition(after,'tidebox'),/not available/);
+  const after={...run,state:paid};assert.equal(tideBoxOffered(after),false);assert.throws(()=>transition(after,'tidebox'),/no longer available/);
   assert.ok(!questView(after).components[0].components.some(b=>b.data.custom_id.endsWith(':tidebox')));
-  const broke={...run,state:{...run.state,coins:{...run.state.coins,gp:0,sp:50}}};assert.equal(tideBoxOffered(broke),false);assert.throws(()=>transition(broke,'tidebox'),/not available/);
-  const v1={...run,snapshot:{...snapshot,v:1}};assert.equal(tideBoxOffered(v1),false);assert.throws(()=>transition(v1,'tidebox'),/not available/);
+  const broke={...run,state:{...run.state,coins:{...run.state.coins,gp:0,sp:50}}};assert.equal(tideBoxOffered(broke),false);assert.throws(()=>transition(broke,'tidebox'),/no longer available/);
+  const v1={...run,snapshot:{...snapshot,v:1}};assert.equal(tideBoxOffered(v1),false);assert.throws(()=>transition(v1,'tidebox'),/no longer available/);
   assert.throws(()=>transition({...run,state:{...run.state,scene:'shore'}},'tidebox'),/no longer available/);
   const free=transition(run,'finish');assert.equal(free.coins.gp,4);
 });
@@ -111,7 +111,7 @@ test('tide-box cost: simultaneous clicks spend once, receipt is pending, wrong e
   assert.ok(clicks.every(r=>r.revision===3&&r.state.coins.gp===3));
   assert.equal((await db.query(`SELECT count(*)::integer AS n FROM ledger_quest_test_events WHERE run_id=$1 AND action='tidebox'`,[run.id])).rows[0].n,1);
   const stale=await store.act(run.id,g,p,2,'tidebox');assert.equal(stale.state.coins.gp,3);
-  await assert.rejects(store.act(run.id,g,p,3,'tidebox'),/not available/);
+  await assert.rejects(store.act(run.id,g,p,3,'tidebox'),/no longer available/);
   run=await store.act(run.id,g,p,3,'finish');assert.equal(run.state.scene,'complete');
   const receipt=(await db.query('SELECT status,receipt FROM ledger_quest_test_receipts WHERE run_id=$1',[run.id])).rows[0];
   assert.equal(receipt.status,'pending');assert.equal(receipt.receipt.changes.coins.gp,-1);assert.equal(receipt.receipt.starting.coins.gp,4);assert.equal(receipt.receipt.current.coins.gp,3);

@@ -3,6 +3,8 @@
 All AP and approvals remain test records. Existing balances, submissions and Tupper registrations are preserved.
 
 ## Latest changes
+- Quest engine: quests are now data files in `src/quests/` run by `src/quest-engine.js`. The Drowned Watch was converted with the same scene and choice ids, so unfinished runs continue. Supports skill checks, saving throws, ability checks, advantage, passives, damage (fixed or dice), going down at 0 HP, once-per-visit choices, costs, milestones, and choices unlocked by earlier discoveries.
+- Full character export: `avrae/depart-alias.txt` (v3) exports all 18 skills, 6 saves, 6 ability checks, ability scores, level, HP, carried bags and coins. Passive Perception uses `ledger_passive_perception` if set, otherwise 10 + Perception (±5 for advantage/disadvantage). The bot still accepts v1/v2 exports. `!depart <quest code>` works for any registered quest.
 - Every Ledger message (expeditions, supplies, departures, AP, Tupper brackets, character submissions and reviews, staff adjustments, DMs and channel reports) now uses the shared card style in `src/ui.js`. Review-post lookup still works for existing posts.
 - Drowned Watch TEST: the departure review is now a formatted embed with a sheet link in the title, HP / passive Perception / coins side by side, skills on one line, one inventory field per carried bag (empty bags shown), known observations as a list, and an amber color when HP is low.
 - Drowned Watch TEST: the departure review shows a Low HP warning when the character is at or below half maximum HP. Departure is still allowed. New departures at 0 HP remain blocked.
@@ -13,6 +15,21 @@ All AP and approvals remain test records. Existing balances, submissions and Tup
 - After editing their character, the submitting player clicks Resubmit Changes, or runs /ledger-character resubmit name:Character. The same post returns to Pending, Moderators are alerted, and Approve is enabled again.
 - Resubmit reuses saved links and options. If those changed, run submit again with the same name to replace them.
 - Only administrators and configured Moderators can approve or request changes. Only the submitting player can resubmit. Staff may explicitly return an approved record for corrections. Its original first-approval date remains historical; it does not count as currently approved until reapproved.
+
+## Writing a quest
+1. Copy `src/quests/drowned-watch.js` to `src/quests/<quest-code>.js` and change the id, name, scenes and text.
+2. Add it to the list in `src/quests/index.js`.
+3. Run `npm test`. Every quest is validated; the error names the scene and choice to fix.
+
+Scene choices (max 5 per scene) are one of:
+- **Check:** `check:{skill:'stealth'|save:'dex'|ability:'str', dc:13}` with `success` and `failure` outcomes.
+- **Plain:** `outcome:{...}` with no roll.
+
+Outcomes can set `text`, `goto` (a scene id, `@complete` or `@retreat`), `facts` (saved to the character forever), `flags` (this visit only), `milestone`, and `damage` (number or dice like `1d6+1`; reaching 0 HP ends the visit as **Carried Home**).
+Choice options: `requires:{facts:[...], notFacts:[...], flags:{...}, minLevel:3, bags:true}`, `cost:{coins:{gp:1}, items:[...], hp:2}`, `once:true`, `style`, `emoji`. A scene can add `passive:{skill, dc, success:{text, facts}}`.
+
+## Avrae departure alias
+The installed `!depart` server alias source is `avrae/depart-alias.txt`. Paste it into the Avrae workshop alias when it changes. Deploy the bot first: it accepts both the old and new export formats.
 
 ## Card style (use for every new message)
 Build every bot message with `card()` / `message()` / `notice()` from `src/ui.js` so the Ledger looks like one system:

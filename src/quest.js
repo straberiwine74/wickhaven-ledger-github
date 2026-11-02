@@ -1,14 +1,33 @@
-import { randomInt, randomUUID } from 'node:crypto';
-import { importBags, hasResourceChanges, matchesEnding, resourceReceipt, spendResources } from './quest-resources.js';
+import { randomUUID } from 'node:crypto';
+import { importBags, hasResourceChanges, matchesEnding, resourceReceipt } from './quest-resources.js';
+import { transition, defaultDie, questOf, available, isTerminal } from './quest-engine.js';
+import { getQuest } from './quests/index.js';
+import { SKILLS, ABILITIES, LEGACY_SKILLS } from './quest-schema.js';
+export { transition };
 
-export const skillNames = ['athletics','stealth','investigation','perception'];
+export const skillNames = LEGACY_SKILLS;
 function requireValue(ok, message) { if (!ok) throw new Error(message); }
 function integer(n, min, max) { return Number.isInteger(n) && n >= min && n <= max; }
+// v3 exports the full Avrae sheet compactly: sk (18 skills), sv (6 saves),
+// ck (6 ability checks), ab (6 scores) and adv (advantage by key, e.g.
+// "stealth", "save.dex", "check.str"). Expand it into {mod,adv} entries.
+function expandSheet(s) {
+  const adv=s.adv??{},num=(o,k)=>o?.[k];
+  requireValue(s.sk&&s.sv&&s.ck&&s.ab&&typeof adv==='object'&&!Array.isArray(adv),'Departure data is missing the full character sheet.');
+  for(const v of Object.values(adv)) requireValue(v===true||v===false,'Invalid advantage entry.');
+  const out={...s,skills:{},saves:{},checks:{},abilities:{}};
+  for(const k of Object.keys(SKILLS)) out.skills[k]={mod:num(s.sk,k),adv:adv[k]??null};
+  for(const k of Object.keys(ABILITIES)) {out.saves[k]={mod:num(s.sv,k),adv:adv['save.'+k]??null};out.checks[k]={mod:num(s.ck,k),adv:adv['check.'+k]??null};out.abilities[k]=num(s.ab,k);}
+  for(const k of ['sk','sv','ck','ab','adv']) delete out[k];
+  return out;
+}
+
 export function validateSnapshot(s) {
-  requireValue(s && [1,2].includes(s.v) && s.quest === 'drowned-watch', 'Unsupported snapshot or quest.');
+  requireValue(s && [1,2,3].includes(s.v) && (s.v===3 ? !!getQuest(s.quest) : s.quest === 'drowned-watch'), 'Unsupported snapshot or quest.');
   requireValue(JSON.stringify(s).length<=6000,'Snapshot too large. Reduce manifest entries.');
   s=structuredClone(s);
-  if(s.v===2) {
+  if(s.v===3) s=expandSheet(s);
+  if(s.v>=2) {
     requireValue(s.loadout?.source==='bags-rewritten','Invalid carried bags.');
     s.loadout.items=importBags(s.loadout);
     requireValue(!s.reconcile || /^[a-f0-9-]{36}$/.test(s.reconcile),'Invalid reconciliation reference.');
@@ -16,16 +35,19 @@ export function validateSnapshot(s) {
   for (const k of ['guild','channel','player','invocation']) requireValue(/^\d{17,20}$/.test(s[k]), `Invalid ${k}.`);
   requireValue(/^beyond-\d+$/.test(s.character), 'Use an imported D&D Beyond character.');
   requireValue(typeof s.name === 'string' && s.name.length > 0 && s.name.length <= 80 && !/[`\r\n]/.test(s.name), 'Invalid character name.');
-  requireValue(integer(s.hp,s.v===2?0:1,999) && integer(s.maxHp,Math.max(1,s.hp),999) && integer(s.tempHp,0,999), 'Invalid HP.');
+  requireValue(integer(s.hp,s.v>=2?0:1,999) && integer(s.maxHp,Math.max(1,s.hp),999) && integer(s.tempHp,0,999), 'Invalid HP.');
   requireValue(integer(s.passive,1,50), 'Declare and review actual passive Perception.');
-  for (const key of skillNames) {
-    const skill = s.skills?.[key];
-    requireValue(skill && integer(skill.mod,-10,40) && [true,false,null].includes(skill.adv), `Invalid ${key}.`);
+  const entryOk=e=>e && integer(e.mod,-10,40) && [true,false,null].includes(e.adv);
+  for (const key of s.v===3?Object.keys(SKILLS):skillNames) requireValue(entryOk(s.skills?.[key]), `Invalid ${SKILLS[key]??key}.`);
+  if(s.v===3) {
+    for(const a of Object.keys(ABILITIES)) requireValue(entryOk(s.saves?.[a])&&entryOk(s.checks?.[a])&&integer(s.abilities?.[a],1,30),`Invalid ${ABILITIES[a]}.`);
+    requireValue(integer(s.level,1,20),'Invalid character level.');
+    requireValue(['declared','computed'].includes(s.passiveSource),'Invalid passive Perception source.');
   }
-  requireValue((s.v===2||s.loadout?.source === 'declared-manifest') && Array.isArray(s.loadout.items) && s.loadout.items.length <= (s.v===2?60:20), 'A declared loadout is required (maximum 20 entries).');
+  requireValue((s.v>=2||s.loadout?.source === 'declared-manifest') && Array.isArray(s.loadout.items) && s.loadout.items.length <= (s.v>=2?60:20), 'A declared loadout is required (maximum 20 entries).');
   const seen = new Set();
   for (const item of s.loadout.items) {
-    requireValue(s.v===2 || (typeof item.name === 'string' && /^[a-zA-Z0-9 ()'’.,/-]{1,60}$/.test(item.name) && integer(item.qty,1,999)), 'Invalid loadout item.');
+    requireValue(s.v>=2 || (typeof item.name === 'string' && /^[a-zA-Z0-9 ()'’.,/-]{1,60}$/.test(item.name) && integer(item.qty,1,999)), 'Invalid loadout item.');
     const key=JSON.stringify([item.bag??'',item.name.toLowerCase()]);
     requireValue(!seen.has(key), 'Combine duplicate inventory entries.'); seen.add(key);
   }
@@ -84,57 +106,14 @@ export const questSchema = [
   `CREATE TABLE IF NOT EXISTS ledger_quest_test_receipts (run_id text PRIMARY KEY REFERENCES ledger_quest_test_runs(id), guild_id text NOT NULL, player_id text NOT NULL, character_id text NOT NULL, receipt jsonb NOT NULL, status text NOT NULL CHECK(status IN ('pending','no-change','verified')), verified_at timestamptz, created_at timestamptz NOT NULL DEFAULT now())`
 ];
 
-// One explicitly offered, scene-owned cost. Bag (v2) runs only: v1 manifest
-// runs have no reconciliation path, so a cost there could never be cleared.
-export const tideBoxCost={coins:{gp:1}};
+// Kept for older callers and tests: is the Drowned Watch tide-box offered?
 export function tideBoxOffered(run) {
-  return run.snapshot?.v===2 && run.state.scene==='landing' && !run.state.tidebox && (run.state.coins?.gp??0)>=tideBoxCost.coins.gp;
-}
-
-export function transition(run, action, die = () => randomInt(1,21)) {
-  const state = structuredClone(run.state), snapshot = run.snapshot;
-  const draw = () => { const n=die(); requireValue(integer(n,1,20),'Invalid die.'); return n; };
-  if (action === 'cancel' && state.scene === 'review') {
-    state.scene='cancelled'; state.text='Unconfirmed departure discarded. Correct your manifest or character export, then depart again.';
-  } else if (action === 'confirm' && state.scene === 'review') {
-    state.scene='shore'; state.text='The Drowned Watch leans above the surf. A chain hangs from its upper landing; each wave pulls it taut. Below, a narrow culvert breathes cold air. The stairs are slick and exposed.';
-    state.text += `\nPassive Perception ${snapshot.passive} applied to the approach.`;
-    if (snapshot.passive >= 14) { state.text+=' You notice the chain pulls away from sound stone: it could tear loose under weight.'; state.facts=['chain-anchor']; }
-  } else if (action === 'retreat' && ['shore','landing'].includes(state.scene)) {
-    state.returnTo=state.scene; state.scene='town'; state.text='You withdraw along the clear shore path. No roll or rest. Your expedition and supplies remain locked.';
-  } else if (action === 'resume' && state.scene === 'town') {
-    state.scene=state.returnTo; state.text=state.returnTo === 'shore' ? 'You return to the same shore approach. Earlier discoveries and resources remain.' : 'You return to the secured landing; the recovered observation remains in your journal.';
-  } else if (state.scene === 'shore' && ['climb','sneak','study'].includes(action)) {
-    const skillName={climb:'athletics',sneak:'stealth',study:'investigation'}[action];
-    const skill=snapshot.skills[skillName], dice=[draw()];
-    if (skill.adv !== null) dice.push(draw());
-    const face=skill.adv===true?Math.max(...dice):skill.adv===false?Math.min(...dice):dice[0];
-    const total=face+skill.mod, success=total >= {climb:13,sneak:12,study:14}[action];
-    state.roll={skill:skillName,dice,modifier:skill.mod,total,success};
-    state.scene='landing';
-    const result={
-      climb: success ? 'You climb the exposed stairs and secure the landing. From above, you see the culvert mouth vanish beneath a passing swell.' : 'The chain tears free. You drop onto a lower shelf and reach the landing by a slower route. Your pack catches on the stone; the noise carries into the tower.',
-      sneak: success ? 'You slip through the culvert between waves. Moon-shaped scratches mark a concealed side entrance.' : 'A wave drives you back before you can pass. You take the long stairs; a loose shutter begins knocking above you.',
-      study: success ? 'You read the surviving harbor marks: the lower passage is usable only at low tide. You follow a marked maintenance route to the landing.' : 'Salt has eaten the key markings. Working slowly, you find a stable maintenance route, but darkness overtakes the outer yard.'
-    };
-    state.alert = !success && action !== 'study';
-    state.text=`${skillName}: ${dice.join(', ')} ${skill.mod<0?'-':'+'} ${Math.abs(skill.mod)} = ${total}.\n${result[action]}`;
-    state.facts=[...(state.facts??[]),success?{climb:'culvert-submerges',sneak:'moon-marked-door',study:'culvert-low-tide'}[action]:'maintenance-route'];
-  } else if (action === 'tidebox' && state.scene === 'landing') {
-    requireValue(tideBoxOffered(run),'The tide-box offering is not available on this visit.');
-    const paid=spendResources(state,tideBoxCost);
-    paid.tidebox=true;
-    paid.text='You drop 1 gp through the slot of the old keeper\u2019s tide-box. The lid clicks open on a waxed slip: the Watch\u2019s last tide rota. The lower passage floods two hours before high water; the culvert clears an hour after the ebb.\n1 gp spent. It is listed in your supplies receipt.';
-    paid.facts=[...(paid.facts??[]),'tide-rota'];
-    return paid;
-  } else if (action === 'finish' && state.scene === 'landing') {
-    state.scene='complete'; state.text='You copy the Watch’s surviving harbor marks and return to Wickhaven. This short reconnaissance is complete. Your journal is saved.';
-  } else throw new Error('That choice is no longer available. Use the latest buttons.');
-  return state;
+  const choice=questOf(run).scenes[run.state.scene]?.choices.find(c=>c.id==='tidebox');
+  return !!choice&&available(run,choice);
 }
 
 export class QuestStore {
-  constructor(pool, die) { this.pool=pool; this.die=die; }
+  constructor(pool, die=defaultDie) { this.pool=pool; this.die=die; }
   async init() { for (const sql of questSchema) await this.pool.query(sql); }
   async open(s) {
     s=validateSnapshot(s);
@@ -150,7 +129,8 @@ export class QuestStore {
     requireValue(s.hp>0,'Recover HP before starting a new expedition.');
     const pending=(await db.query(`SELECT run_id FROM ledger_quest_test_receipts WHERE guild_id=$1 AND character_id=$2 AND status='pending' LIMIT 1`,[s.guild,s.character])).rows[0];
     requireValue(!pending,'Reconcile the previous expedition receipt before a new departure.');
-    const state={scene:'review',hp:s.hp,tempHp:s.tempHp,coins:s.coins,items:s.loadout.items,text:'Review your exported character and declared loadout. Confirming locks this expedition. TEST only: no AP, gold, or sheet write-back.'};
+    const quest=getQuest(s.quest);requireValue(quest&&quest.status!=='hidden','This quest is not available.');
+    const state={scene:'review',hp:s.hp,tempHp:s.tempHp,coins:s.coins,items:s.loadout.items,text:'Review your exported character and carried bags. Confirming locks this expedition.'};
     const run=(await db.query(`INSERT INTO ledger_quest_test_runs(id,guild_id,player_id,character_id,snapshot,state) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,[randomUUID(),s.guild,s.player,s.character,JSON.stringify(s),JSON.stringify(state)])).rows[0];
     await db.query('COMMIT');return run;
     } catch(e) {await db.query('ROLLBACK');throw e;} finally {db.release();}
@@ -164,7 +144,7 @@ export class QuestStore {
     try {
       await db.query('BEGIN');
       const run=(await db.query(`SELECT r.* FROM ledger_quest_test_runs r JOIN ledger_quest_test_receipts t ON t.run_id=r.id WHERE r.id=$1 AND r.guild_id=$2 AND r.player_id=$3 AND r.character_id=$4 FOR UPDATE OF t`,[s.reconcile,s.guild,s.player,s.character])).rows[0];
-      requireValue(run&&run.finished&&s.v===2&&run.snapshot.v===2,'No matching completed bag expedition receipt.');
+      requireValue(run&&run.finished&&s.v>=2&&run.snapshot.v>=2,'No matching completed bag expedition receipt.');
       requireValue(matchesEnding(run,s),'Exported bags, HP or currency do not match the ending receipt.');
       await db.query(`UPDATE ledger_quest_test_receipts SET status='verified',verified_at=now() WHERE run_id=$1`,[run.id]);
       await db.query('COMMIT');return run;
@@ -177,16 +157,23 @@ export class QuestStore {
       const run=(await db.query('SELECT * FROM ledger_quest_test_runs WHERE id=$1 FOR UPDATE',[id])).rows[0];
       requireValue(run && run.guild_id===guild && run.player_id===player,'These expedition buttons belong to another player.');
       if(run.revision!==revision || run.finished) { await db.query('COMMIT'); return run; }
-      if(action==='revisit') throw new Error('Start a fresh visit with !depart drowned-watch.');
-      const state=transition(run,action,this.die);
+      if(action==='revisit') throw new Error('Start a fresh visit with !depart.');
+      const known=(await db.query('SELECT fact FROM ledger_quest_test_knowledge WHERE guild_id=$1 AND character_id=$2',[guild,run.character_id])).rows.map(x=>x.fact);
+      const state=transition(run,action,this.die,known);
       for(const fact of state.facts??[]) await db.query('INSERT INTO ledger_quest_test_knowledge VALUES($1,$2,$3) ON CONFLICT DO NOTHING',[guild,run.character_id,fact]);
-      if(state.scene==='complete') {
-        const reward=await db.query(`INSERT INTO ledger_quest_test_rewards VALUES($1,$2,'watch-reconnaissance',$3) ON CONFLICT DO NOTHING RETURNING reward`,[guild,run.character_id,id]);
-        state.text+=reward.rows.length?' First reconnaissance recorded (journal only; no AP or gold).':' Repeat visit recorded. No additional reward.';
+      const ended=isTerminal(state.scene)&&state.scene!=='cancelled';
+      if(ended) {
+        const quest=questOf(run);
+        // Milestones are journal records today; real AP is attached to them later.
+        for(const m of state.milestones??[]) await db.query(`INSERT INTO ledger_quest_test_rewards VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`,[guild,run.character_id,m,id]);
+        if(state.scene==='complete') {
+          const reward=await db.query(`INSERT INTO ledger_quest_test_rewards VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING reward`,[guild,run.character_id,quest.completion.milestone,id]);
+          state.text+=reward.rows.length?quest.completion.first:quest.completion.repeat;
+        }
       }
       await db.query('INSERT INTO ledger_quest_test_events(run_id,revision,action,state) VALUES($1,$2,$3,$4)',[id,revision+1,action,JSON.stringify(state)]);
-      const saved=(await db.query('UPDATE ledger_quest_test_runs SET state=$2,revision=revision+1,finished=$3 WHERE id=$1 RETURNING *',[id,JSON.stringify(state),['complete','cancelled'].includes(state.scene)])).rows[0];
-      if(state.scene==='complete') await db.query('INSERT INTO ledger_quest_test_receipts(run_id,guild_id,player_id,character_id,receipt,status) VALUES($1,$2,$3,$4,$5,$6)',[id,guild,player,run.character_id,JSON.stringify(resourceReceipt(saved)),hasResourceChanges(saved)?'pending':'no-change']);
+      const saved=(await db.query('UPDATE ledger_quest_test_runs SET state=$2,revision=revision+1,finished=$3 WHERE id=$1 RETURNING *',[id,JSON.stringify(state),isTerminal(state.scene)])).rows[0];
+      if(ended) await db.query('INSERT INTO ledger_quest_test_receipts(run_id,guild_id,player_id,character_id,receipt,status) VALUES($1,$2,$3,$4,$5,$6)',[id,guild,player,run.character_id,JSON.stringify(resourceReceipt(saved)),hasResourceChanges(saved)?'pending':'no-change']);
       await db.query('COMMIT'); return saved;
     } catch(e) { await db.query('ROLLBACK'); throw e; } finally { db.release(); }
   }
