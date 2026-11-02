@@ -1,28 +1,36 @@
 import { randomInt, randomUUID } from 'node:crypto';
+import { importBags, hasResourceChanges, matchesEnding, resourceReceipt } from './quest-resources.js';
 
 export const skillNames = ['athletics','stealth','investigation','perception'];
 function requireValue(ok, message) { if (!ok) throw new Error(message); }
 function integer(n, min, max) { return Number.isInteger(n) && n >= min && n <= max; }
 export function validateSnapshot(s) {
-  requireValue(s && s.v === 1 && s.quest === 'drowned-watch', 'Unsupported snapshot or quest.');
+  requireValue(s && [1,2].includes(s.v) && s.quest === 'drowned-watch', 'Unsupported snapshot or quest.');
+  requireValue(JSON.stringify(s).length<=6000,'Snapshot too large. Reduce manifest entries.');
+  s=structuredClone(s);
+  if(s.v===2) {
+    requireValue(s.loadout?.source==='bags-rewritten','Invalid carried bags.');
+    s.loadout.items=importBags(s.loadout);
+    requireValue(!s.reconcile || /^[a-f0-9-]{36}$/.test(s.reconcile),'Invalid reconciliation reference.');
+  }
   for (const k of ['guild','channel','player','invocation']) requireValue(/^\d{17,20}$/.test(s[k]), `Invalid ${k}.`);
   requireValue(/^beyond-\d+$/.test(s.character), 'Use an imported D&D Beyond character.');
   requireValue(typeof s.name === 'string' && s.name.length > 0 && s.name.length <= 80 && !/[`\r\n]/.test(s.name), 'Invalid character name.');
-  requireValue(integer(s.hp,1,999) && integer(s.maxHp,s.hp,999) && integer(s.tempHp,0,999), 'Invalid HP.');
+  requireValue(integer(s.hp,s.v===2?0:1,999) && integer(s.maxHp,Math.max(1,s.hp),999) && integer(s.tempHp,0,999), 'Invalid HP.');
   requireValue(integer(s.passive,1,50), 'Declare and review actual passive Perception.');
   for (const key of skillNames) {
     const skill = s.skills?.[key];
     requireValue(skill && integer(skill.mod,-10,40) && [true,false,null].includes(skill.adv), `Invalid ${key}.`);
   }
-  requireValue(s.loadout?.source === 'declared-manifest' && Array.isArray(s.loadout.items) && s.loadout.items.length <= 20, 'A declared loadout is required (maximum 20 entries).');
+  requireValue((s.v===2||s.loadout?.source === 'declared-manifest') && Array.isArray(s.loadout.items) && s.loadout.items.length <= (s.v===2?60:20), 'A declared loadout is required (maximum 20 entries).');
   const seen = new Set();
   for (const item of s.loadout.items) {
-    requireValue(typeof item.name === 'string' && /^[a-zA-Z0-9 ()'’.,/-]{1,60}$/.test(item.name) && integer(item.qty,1,999), 'Invalid loadout item.');
-    requireValue(!seen.has(item.name.toLowerCase()), 'Combine duplicate inventory entries.'); seen.add(item.name.toLowerCase());
+    requireValue(s.v===2 || (typeof item.name === 'string' && /^[a-zA-Z0-9 ()'’.,/-]{1,60}$/.test(item.name) && integer(item.qty,1,999)), 'Invalid loadout item.');
+    const key=JSON.stringify([item.bag??'',item.name.toLowerCase()]);
+    requireValue(!seen.has(key), 'Combine duplicate inventory entries.'); seen.add(key);
   }
   for (const coin of ['pp','gp','ep','sp','cp']) requireValue(integer(s.coins?.[coin],0,1000000), 'Invalid coins.');
   requireValue(typeof s.signature === 'string' && s.signature.length < 300, 'Missing Avrae signature.');
-  requireValue(JSON.stringify(s).length <= 3800, 'Snapshot too large. Reduce manifest entries.');
   return JSON.parse(JSON.stringify(s));
 }
 
@@ -72,7 +80,8 @@ export const questSchema = [
   `CREATE UNIQUE INDEX IF NOT EXISTS ledger_quest_test_unfinished ON ledger_quest_test_runs(guild_id,player_id,character_id) WHERE NOT finished`,
   `CREATE TABLE IF NOT EXISTS ledger_quest_test_knowledge (guild_id text NOT NULL, character_id text NOT NULL, fact text NOT NULL, PRIMARY KEY(guild_id,character_id,fact))`,
   `CREATE TABLE IF NOT EXISTS ledger_quest_test_rewards (guild_id text NOT NULL, character_id text NOT NULL, reward text NOT NULL, run_id text NOT NULL, PRIMARY KEY(guild_id,character_id,reward))`,
-  `CREATE TABLE IF NOT EXISTS ledger_quest_test_events (run_id text NOT NULL, revision integer NOT NULL, action text NOT NULL, state jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(run_id,revision))`
+  `CREATE TABLE IF NOT EXISTS ledger_quest_test_events (run_id text NOT NULL, revision integer NOT NULL, action text NOT NULL, state jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(run_id,revision))`,
+  `CREATE TABLE IF NOT EXISTS ledger_quest_test_receipts (run_id text PRIMARY KEY REFERENCES ledger_quest_test_runs(id), guild_id text NOT NULL, player_id text NOT NULL, character_id text NOT NULL, receipt jsonb NOT NULL, status text NOT NULL CHECK(status IN ('pending','no-change','verified')), verified_at timestamptz, created_at timestamptz NOT NULL DEFAULT now())`
 ];
 
 export function transition(run, action, die = () => randomInt(1,21)) {
@@ -115,12 +124,37 @@ export class QuestStore {
   async init() { for (const sql of questSchema) await this.pool.query(sql); }
   async open(s) {
     s=validateSnapshot(s);
+    const db=await this.pool.connect();
+    try {
+    await db.query('BEGIN');
+    await db.query('SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))',[s.guild,s.character]);
     // The immutable snapshot belongs to an approved sheet, never a displayed name.
-    const approved=await this.pool.query(`SELECT 1 FROM ledger_test_characters WHERE guild_id=$1 AND player_id=$2 AND sheet_id=$3 AND status='approved'`,[s.guild,s.player,s.character.slice(7)]);
+    const approved=await db.query(`SELECT 1 FROM ledger_test_characters WHERE guild_id=$1 AND player_id=$2 AND sheet_id=$3 AND status='approved'`,[s.guild,s.player,s.character.slice(7)]);
     requireValue(approved.rows.length,'This imported sheet needs Ledger TEST approval first.');
+    const existing=(await db.query(`SELECT * FROM ledger_quest_test_runs WHERE guild_id=$1 AND player_id=$2 AND character_id=$3 AND NOT finished`,[s.guild,s.player,s.character])).rows[0];
+    if(existing) {await db.query('COMMIT');return existing;}
+    requireValue(s.hp>0,'Recover HP before starting a new expedition.');
+    const pending=(await db.query(`SELECT run_id FROM ledger_quest_test_receipts WHERE guild_id=$1 AND character_id=$2 AND status='pending' LIMIT 1`,[s.guild,s.character])).rows[0];
+    requireValue(!pending,'Reconcile the previous expedition receipt before a new departure.');
     const state={scene:'review',hp:s.hp,tempHp:s.tempHp,coins:s.coins,items:s.loadout.items,text:'Review your exported character and declared loadout. Confirming locks this expedition. TEST only: no AP, gold, or sheet write-back.'};
-    await this.pool.query(`INSERT INTO ledger_quest_test_runs(id,guild_id,player_id,character_id,snapshot,state) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,[randomUUID(),s.guild,s.player,s.character,JSON.stringify(s),JSON.stringify(state)]);
-    return (await this.pool.query(`SELECT * FROM ledger_quest_test_runs WHERE guild_id=$1 AND player_id=$2 AND character_id=$3 AND NOT finished`,[s.guild,s.player,s.character])).rows[0];
+    const run=(await db.query(`INSERT INTO ledger_quest_test_runs(id,guild_id,player_id,character_id,snapshot,state) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,[randomUUID(),s.guild,s.player,s.character,JSON.stringify(s),JSON.stringify(state)])).rows[0];
+    await db.query('COMMIT');return run;
+    } catch(e) {await db.query('ROLLBACK');throw e;} finally {db.release();}
+  }
+  async inspect(id,guild,player) {
+    const run=(await this.pool.query('SELECT * FROM ledger_quest_test_runs WHERE id=$1 AND guild_id=$2 AND player_id=$3',[id,guild,player])).rows[0];
+    requireValue(run,'These expedition buttons belong to another player.');return run;
+  }
+  async reconcile(s) {
+    s=validateSnapshot(s);const db=await this.pool.connect();
+    try {
+      await db.query('BEGIN');
+      const run=(await db.query(`SELECT r.* FROM ledger_quest_test_runs r JOIN ledger_quest_test_receipts t ON t.run_id=r.id WHERE r.id=$1 AND r.guild_id=$2 AND r.player_id=$3 AND r.character_id=$4 FOR UPDATE OF t`,[s.reconcile,s.guild,s.player,s.character])).rows[0];
+      requireValue(run&&run.finished&&s.v===2&&run.snapshot.v===2,'No matching completed bag expedition receipt.');
+      requireValue(matchesEnding(run,s),'Exported bags, HP or currency do not match the ending receipt.');
+      await db.query(`UPDATE ledger_quest_test_receipts SET status='verified',verified_at=now() WHERE run_id=$1`,[run.id]);
+      await db.query('COMMIT');return run;
+    } catch(e) {await db.query('ROLLBACK');throw e;} finally {db.release();}
   }
   async act(id,guild,player,revision,action) {
     const db=await this.pool.connect();
@@ -138,6 +172,7 @@ export class QuestStore {
       }
       await db.query('INSERT INTO ledger_quest_test_events(run_id,revision,action,state) VALUES($1,$2,$3,$4)',[id,revision+1,action,JSON.stringify(state)]);
       const saved=(await db.query('UPDATE ledger_quest_test_runs SET state=$2,revision=revision+1,finished=$3 WHERE id=$1 RETURNING *',[id,JSON.stringify(state),['complete','cancelled'].includes(state.scene)])).rows[0];
+      if(state.scene==='complete') await db.query('INSERT INTO ledger_quest_test_receipts(run_id,guild_id,player_id,character_id,receipt,status) VALUES($1,$2,$3,$4,$5,$6)',[id,guild,player,run.character_id,JSON.stringify(resourceReceipt(saved)),hasResourceChanges(saved)?'pending':'no-change']);
       await db.query('COMMIT'); return saved;
     } catch(e) { await db.query('ROLLBACK'); throw e; } finally { db.release(); }
   }
