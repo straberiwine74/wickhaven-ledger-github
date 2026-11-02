@@ -39,6 +39,8 @@ export function validateQuest(q) {
   ok(Object.hasOwn(q.scenes,q.start),'start must name a scene');
   ok(q.completion&&id.test(q.completion.milestone),'needs completion.milestone');
   ok(q.completion.ap===undefined||q.completion.ap===1,'completion.ap can only be 1');
+  // Quest unlock: requires:{facts:[...], scope:'server'|'character', hint}
+  if(q.requires) ok(Array.isArray(q.requires.facts)&&q.requires.facts.length&&q.requires.facts.every(f=>id.test(f))&&['server','character'].includes(q.requires.scope??'character')&&(q.requires.hint===undefined||(typeof q.requires.hint==='string'&&q.requires.hint.length<=300)),'requires needs facts, scope server or character, and an optional hint');
   for(const reserved of ['review','town',...TERMINAL]) ok(!Object.hasOwn(q.scenes,reserved),`scene id "${reserved}" is reserved`);
   const checkOk=c=>ok(c&&Number.isInteger(c.dc)&&c.dc>=1&&c.dc<=40&&[c.skill,c.save,c.ability].filter(Boolean).length===1&&(c.skill?Object.hasOwn(SKILLS,c.skill):Object.hasOwn(ABILITIES,c.save??c.ability)),'check needs exactly one valid skill, save or ability and a dc');
   const outcomeOk=o=>{

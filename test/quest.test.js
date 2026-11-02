@@ -68,7 +68,9 @@ test('database commits choices, resumes after restart, protects ownership and li
     assert.match(fresh.state.text,/No additional reward/);
     assert.equal((await db.query('SELECT * FROM ledger_quest_test_rewards')).rows.length,1);
     assert.equal((await db.query('SELECT * FROM ledger_quest_test_events WHERE run_id=$1',[run.id])).rows.length,5);
-    assert.equal((await db.query('SELECT * FROM ledger_test_days')).rows.length,0);
+    // Any AP comes only from quest milestone awards (none if the quest is in test).
+    const apDays=(await db.query('SELECT COALESCE(sum(ap),0)::integer AS n FROM ledger_test_days')).rows[0].n,awards=(await db.query('SELECT COALESCE(sum(awarded),0)::integer AS n FROM ledger_ap_awards')).rows[0].n;
+    assert.equal(apDays,awards);assert.ok(awards<=1);
   } finally {await db.close();}
 });
 test('review and play controls fit Discord and bind to run revision',()=>{

@@ -56,7 +56,7 @@ const safeMessages=new Set(['Departure data was truncated or malformed.','Unsupp
 export function departureFailure(stage,error) {
   const m=String(error?.message??'');
   const safe=safeMessages.has(m)||/^Invalid [A-Za-z ]{2,40}\.$/.test(m)||/^This character export has no [A-Za-z ]{2,40}\./.test(m)||['This quest is not available.','This quest is still in testing.','Departure data is missing the full character sheet.'].includes(m);
-  const detail=safe?m:'The check did not complete. Staff can inspect the bot log.';
+  const detail=m==='Unfinished expedition elsewhere.'?error.hint:m==='This quest isn\u2019t open yet.'?`${m} ${error.hint??'Someone needs to discover the way there first.'}`:safe?m:'The check did not complete. Staff can inspect the bot log.';
   return notice('⛔ Departure stopped',`**${detail}**`,'danger',[
     {name:'Stopped at',value:title(stage),inline:true},
     {name:'Your progress',value:'Nothing was reset and no reward was given. Saved progress is preserved.',inline:true}

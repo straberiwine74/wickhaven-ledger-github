@@ -97,3 +97,43 @@ test('arriving in a scene shows the outcome, then the scene description; old 4-s
   registerQuest(withText);
   const r2={...run,snapshot:{...snapshot,quest:'text-trial'}};assert.equal(transition(r2,'force',()=>20).text,'It opens.\n\nDust everywhere.');
 });
+test('a quest can stay locked until a discovery is made, by the same character or anyone on the server',async()=>{
+  const base={...trial,completion:{...trial.completion}};
+  registerQuest({...base,id:'locked-server',requires:{facts:['secret-path'],scope:'server',hint:'Find the secret path first.'}});
+  registerQuest({...base,id:'locked-mine',requires:{facts:['secret-path']}});
+  assert.throws(()=>validateQuest({...base,id:'bad-lock',requires:{facts:['x y']}}),/requires needs/);
+  const db=new PGlite();const pool={query:db.query.bind(db),connect:async()=>({query:db.query.bind(db),release(){}})};
+  try {
+    await new TestLedger(pool).init();
+    for(const [n,sheetId] of [['full sheet','789'],['other','790']]) await db.query(`INSERT INTO ledger_test_characters(guild_id,player_id,name_key,name,sheet_id,sheet_url,stats_url,sample_url,stat_set,resources,status) VALUES($1,$2,$3,$3,$4,'url','url','',1,'equipment','approved')`,[g,p,n,sheetId]);
+    const store=new QuestStore(pool,()=>15);await store.init();
+    await assert.rejects(store.open(sheet({quest:'locked-server'})),e=>e.hint==='Find the secret path first.');
+    await db.query(`INSERT INTO ledger_quest_test_knowledge VALUES($1,'beyond-790','secret-path')`,[g]);
+    const opened=await store.open(sheet({quest:'locked-server'}));
+    await assert.rejects(store.open(sheet({quest:'locked-mine'})),e=>/unfinished Engine Trial expedition/.test(e.hint)&&/!depart locked-server/.test(e.hint));
+    await store.act(opened.id,g,p,0,'cancel');
+    await assert.rejects(store.open(sheet({quest:'locked-mine'})),/isn’t open yet/);
+  } finally {await db.close();}
+});
+test('every registered quest can be finished from every reachable point, with no dead ends or broken checks',async()=>{
+  const {readFile}=await import('node:fs/promises');
+  const raw=JSON.parse(await readFile(new URL('./fixtures/alias-v3-export.json',import.meta.url),'utf8'));
+  for(const q of Object.values(quests).filter(q=>!['engine-trial','text-trial','locked-server','locked-mine','live-trial','test-trial'].includes(q.id))) {
+    const reached=new Set();
+    for(const passive of [8,25]) {
+      // Every check is explored both ways: natural 20 (+10) succeeds, natural 1 (-10) fails.
+      const s=validateSnapshot({...raw,quest:q.id});for(const k of Object.keys(s.skills)) s.skills[k].mod=passive>10?10:-10;s.passive=passive;
+      const seen=new Set(),stack=[{scene:'review',hp:12,tempHp:0,items:s.loadout.items,coins:s.coins}];
+      while(stack.length) {
+        const st=stack.pop(),key=JSON.stringify([st.scene,st.used,(st.facts??[]).slice().sort(),st.flags,st.returnTo]);
+        if(seen.has(key)) continue;seen.add(key);reached.add(st.scene);
+        if(['complete','cancelled','downed'].includes(st.scene)) continue;
+        const choices=choicesFor({snapshot:s,state:st},[]);assert.ok(choices.length,`${q.id}: dead end at ${st.scene}`);
+        for(const c of choices) for(const die of c.check?[()=>20,()=>1]:[()=>1]) stack.push(transition({snapshot:s,state:st},c.id,die));
+        assert.ok(seen.size<400000,`${q.id}: too many states`);
+      }
+    }
+    for(const sc of Object.keys(q.scenes)) assert.ok(reached.has(sc),`${q.id}: scene ${sc} can never be reached`);
+    assert.ok(reached.has('complete'),`${q.id}: cannot be completed`);
+  }
+});

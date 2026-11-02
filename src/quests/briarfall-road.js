@@ -1,40 +1,523 @@
-// The Drowned Watch, converted to quest data. Scene and choice ids match the
-// original hardcoded prototype so unfinished runs saved before the engine
-// change continue exactly where they stopped.
+// Briarfall Road — built from Wickhaven-Ledger-Quest-Compendium.md (exact engine fields), November 2, 2026.
+// Status 'test': runs only in the staff quest channel until changed to 'live'.
+
 export default {
-  id:'drowned-watch',
-  name:'Drowned Watch',
-  emoji:'🗼',
-  status:'test',
-  start:'shore',
-  completion:{milestone:'watch-reconnaissance',first:' First reconnaissance recorded (journal only; no AP or gold).',repeat:' Repeat visit recorded. No additional reward.'},
-  scenes:{
-    shore:{
-      title:'🌊 The Shore',tone:'shore',
-      text:'The Drowned Watch leans above the surf. A chain hangs from its upper landing; each wave pulls it taut. Below, a narrow culvert breathes cold air. The stairs are slick and exposed.',
-      resumeText:'You return to the same shore approach. Earlier discoveries and resources remain.',
-      passive:{skill:'perception',dc:14,note:'Passive Perception {value} applied to the approach.',success:{text:'You notice the chain pulls away from sound stone: it could tear loose under weight.',facts:['chain-anchor']}},
-      choices:[
-        {id:'climb',label:'Climb the exposed stairs',emoji:'🧗',check:{skill:'athletics',dc:13},
-          success:{text:'You climb the exposed stairs and secure the landing. From above, you see the culvert mouth vanish beneath a passing swell.',facts:['culvert-submerges'],goto:'landing'},
-          failure:{text:'The chain tears free. You drop onto a lower shelf and reach the landing by a slower route. Your pack catches on the stone; the noise carries into the tower.',facts:['maintenance-route'],flags:{alert:true},goto:'landing'}},
-        {id:'sneak',label:'Time the culvert crossing',emoji:'🌊',check:{skill:'stealth',dc:12},
-          success:{text:'You slip through the culvert between waves. Moon-shaped scratches mark a concealed side entrance.',facts:['moon-marked-door'],goto:'landing'},
-          failure:{text:'A wave drives you back before you can pass. You take the long stairs; a loose shutter begins knocking above you.',facts:['maintenance-route'],flags:{alert:true},goto:'landing'}},
-        {id:'study',label:'Study the harbor marks',emoji:'🔎',check:{skill:'investigation',dc:14},
-          success:{text:'You read the surviving harbor marks: the lower passage is usable only at low tide. You follow a marked maintenance route to the landing.',facts:['culvert-low-tide'],goto:'landing'},
-          failure:{text:'Salt has eaten the key markings. Working slowly, you find a stable maintenance route, but darkness overtakes the outer yard.',facts:['maintenance-route'],goto:'landing'}},
-        {id:'retreat',label:'Return to town',emoji:'↩️',style:'secondary',outcome:{text:'You withdraw along the clear shore path. No roll or rest. Your expedition and supplies remain locked.',goto:'@retreat'}}
+  "id": "briarfall-road",
+  "name": "Briarfall Road",
+  "emoji": "🪧",
+  "status": "test",
+  "start": "north-road",
+  "completion": {
+    "milestone": "briarfall-reconnaissance",
+    "first": " First Briarfall Road expedition recorded (journal only; no AP or gold).",
+    "repeat": " Repeat visit recorded. No additional reward."
+  },
+  "scenes": {
+    "north-road": {
+      "title": "🌾 The North Road",
+      "tone": "shore",
+      "text": "The old north road disappears beneath shallow water. Beyond the flooded stretch stands a stone waystation. A broken embankment offers a higher approach, though several sections have slipped into the marsh.",
+      "resumeText": "You return to the flooded north road. The waystation stands beyond the water.",
+      "passive": {
+        "skill": "perception",
+        "dc": 12,
+        "note": "Passive Perception {value} applied to the road.",
+        "success": {
+          "text": "Fresh weed hangs above the present waterline. The tide can cover this entire approach.",
+          "facts": [
+            "briarfall-tide-warning"
+          ]
+        }
+      },
+      "choices": [
+        {
+          "id": "read-tide",
+          "label": "Time your crossing along the road",
+          "emoji": "🌊",
+          "success": {
+            "text": "You follow the exposed paving between the deeper channels and reach the waystation before the water rises.",
+            "goto": "waystation"
+          },
+          "check": {
+            "skill": "survival",
+            "dc": 12
+          },
+          "failure": {
+            "text": "The channels fill faster than expected. You reach the waystation, but the road disappears behind you.",
+            "facts": [
+              "briarfall-tide-cutoff"
+            ],
+            "goto": "waystation"
+          }
+        },
+        {
+          "id": "embankment",
+          "label": "Climb along the higher embankment",
+          "emoji": "🧗",
+          "success": {
+            "text": "You climb over the fallen sections and reach the rear of the waystation. You mark a usable route above the flood.",
+            "facts": [
+              "briarfall-high-route"
+            ],
+            "goto": "waystation"
+          },
+          "check": {
+            "skill": "athletics",
+            "dc": 13
+          },
+          "failure": {
+            "text": "The bank crumbles beneath your foot. You slide into the muddy shallows and finish the approach along the road as the tide closes behind you.",
+            "facts": [
+              "briarfall-embankment-fall"
+            ],
+            "goto": "waystation"
+          }
+        },
+        {
+          "id": "retreat",
+          "label": "Return to Wickhaven",
+          "emoji": "↩️",
+          "outcome": {
+            "text": "You turn back before entering the flooded road. Your expedition remains unfinished.",
+            "goto": "@retreat"
+          },
+          "style": "secondary"
+        }
       ]
     },
-    landing:{
-      title:'🗼 The Landing',tone:'landing',
-      resumeText:'You return to the secured landing; the recovered observation remains in your journal.',
-      choices:[
-        {id:'finish',label:'Record findings & return',emoji:'📜',style:'success',outcome:{text:'You copy the Watch’s surviving harbor marks and return to Wickhaven. This short reconnaissance is complete. Your journal is saved.',goto:'@complete'}},
-        {id:'tidebox',label:'Leave 1 gp in the tide-box (spends 1 gp)',emoji:'🪙',style:'secondary',once:true,legacyFlag:'tidebox',requires:{bags:true},cost:{coins:{gp:1}},
-          outcome:{text:'You drop 1 gp through the slot of the old keeper’s tide-box. The lid clicks open on a waxed slip: the Watch’s last tide rota. The lower passage floods two hours before high water; the culvert clears an hour after the ebb.\n1 gp spent. It is listed in your supplies receipt.',facts:['tide-rota']}},
-        {id:'retreat',label:'Retreat unfinished',emoji:'↩️',style:'secondary',outcome:{text:'You withdraw along the clear shore path. No roll or rest. Your expedition and supplies remain locked.',goto:'@retreat'}}
+    "waystation": {
+      "title": "🎒 The Waystation",
+      "tone": "landing",
+      "text": "Travelers’ packs stand beside cold beds. Boots have been tucked beneath a bench, and a kettle waits beside the hearth. Through the rear doorway, the road continues toward a washed-out bridge.",
+      "resumeText": "You return to the abandoned waystation. Nobody has come back for the belongings.",
+      "passive": {
+        "skill": "investigation",
+        "dc": 12,
+        "note": "Passive Investigation {value} applied to the waystation.",
+        "success": {
+          "text": "The packs contain supplies for a short absence. Their owners expected to return.",
+          "facts": [
+            "briarfall-return-expected"
+          ]
+        }
+      },
+      "choices": [
+        {
+          "id": "search-packs",
+          "label": "Examine the travelers’ belongings",
+          "emoji": "🔎",
+          "success": {
+            "text": "You find food for two days and a luggage tag marked “Harrowmere.” A folded note says, “Keep our beds until we return.”",
+            "facts": [
+              "briarfall-harrowmere-tag",
+              "briarfall-return-expected"
+            ]
+          },
+          "check": {
+            "skill": "investigation",
+            "dc": 12
+          },
+          "failure": {
+            "text": "Damp papers cling together and tear when separated. The packs were deliberately left behind, but you recover no readable destination.",
+            "facts": [
+              "briarfall-packed-belongings"
+            ]
+          },
+          "once": true
+        },
+        {
+          "id": "read-tracks",
+          "label": "Look for signs of where the travelers went",
+          "emoji": "👣",
+          "success": {
+            "text": "Old wear marks lead from the beds to the north doorway. Several travelers left together, taking walking sticks but leaving their heavy packs.",
+            "facts": [
+              "briarfall-travelers-went-north"
+            ]
+          },
+          "check": {
+            "skill": "survival",
+            "dc": 13
+          },
+          "failure": {
+            "text": "Floodwater has carried mud through every doorway. You cannot separate the travelers’ traces from later animal tracks.",
+            "facts": [
+              "briarfall-tracks-obscured"
+            ]
+          },
+          "once": true
+        },
+        {
+          "id": "bridge",
+          "label": "Follow the road to the bridge",
+          "emoji": "🌉",
+          "outcome": {
+            "text": "You follow the surviving paving toward the broken crossing.",
+            "goto": "bridge"
+          }
+        },
+        {
+          "id": "return",
+          "label": "Begin the return journey",
+          "emoji": "↩️",
+          "outcome": {
+            "text": "You leave the belongings where you found them and head toward the flooded approach.",
+            "goto": "return-route"
+          }
+        }
+      ]
+    },
+    "bridge": {
+      "title": "🌉 The Washed-Out Bridge",
+      "tone": "shore",
+      "text": "Most of the bridge lies in the channel. One beam still reaches the far bank. Beyond it, reeds and branches partly hide an old road sign.",
+      "resumeText": "You return to the near bank of the washed-out bridge.",
+      "passive": {
+        "skill": "perception",
+        "dc": 13,
+        "note": "Passive Perception {value} applied to the bridge.",
+        "success": {
+          "text": "A dark split runs through the beam. The upstream supports offer firmer handholds.",
+          "facts": [
+            "briarfall-weak-beam"
+          ]
+        }
+      },
+      "choices": [
+        {
+          "id": "read-sign",
+          "label": "Read the sign without crossing",
+          "emoji": "👀",
+          "success": {
+            "text": "Through a gap in the branches, you read: “HARROWMERE — 6 MILES.” You copy the name before leaving the crossing.",
+            "facts": [
+              "briarfall-harrowmere-discovered"
+            ],
+            "goto": "return-route"
+          },
+          "check": {
+            "skill": "perception",
+            "dc": 14
+          },
+          "failure": {
+            "text": "You can distinguish a settlement name, but branches hide its middle letters.",
+            "goto": "near-bank"
+          }
+        },
+        {
+          "id": "balance",
+          "label": "Balance across the surviving beam",
+          "emoji": "⚖️",
+          "success": {
+            "text": "You cross the beam and step onto the far bank beside the sign.",
+            "goto": "road-sign"
+          },
+          "check": {
+            "skill": "acrobatics",
+            "dc": 14
+          },
+          "failure": {
+            "text": "The beam twists beneath you. You catch a broken crosspiece and hang above the channel.",
+            "goto": "bridge-slip"
+          }
+        },
+        {
+          "id": "climb-supports",
+          "label": "Climb along the bridge supports",
+          "emoji": "💪",
+          "success": {
+            "text": "You work along the upstream supports and climb onto the far bank.",
+            "goto": "road-sign"
+          },
+          "check": {
+            "skill": "athletics",
+            "dc": 14
+          },
+          "failure": {
+            "text": "A support pulls free. You catch the edge of the bridge as your feet drop toward the water.",
+            "goto": "bridge-slip"
+          }
+        },
+        {
+          "id": "turn-back",
+          "label": "Leave the crossing alone",
+          "emoji": "↩️",
+          "outcome": {
+            "text": "You turn back toward the waystation.",
+            "goto": "return-route"
+          }
+        }
+      ]
+    },
+    "bridge-slip": {
+      "title": "🪵 A Failing Handhold",
+      "tone": "shore",
+      "text": "Your handhold shifts beneath your weight. The near bank is close, but broken stone and timber lie in the shallow water below.",
+      "resumeText": "You remain caught above the channel, with the near bank within reach.",
+      "choices": [
+        {
+          "id": "pull-up",
+          "label": "Pull yourself onto the near bank",
+          "emoji": "💪",
+          "success": {
+            "text": "You haul yourself over the broken edge and roll onto solid ground.",
+            "goto": "near-bank"
+          },
+          "check": {
+            "skill": "athletics",
+            "dc": 12
+          },
+          "failure": {
+            "text": "The timber tears loose. You fall into the channel, striking your leg against a submerged stone before crawling onto the bank.",
+            "facts": [
+              "briarfall-bridge-injury"
+            ],
+            "goto": "near-bank"
+          }
+        },
+        {
+          "id": "swing-clear",
+          "label": "Swing toward the muddy bank",
+          "emoji": "🤸",
+          "success": {
+            "text": "You swing clear of the broken supports and land on the muddy bank.",
+            "goto": "near-bank"
+          },
+          "check": {
+            "skill": "acrobatics",
+            "dc": 12
+          },
+          "failure": {
+            "text": "Your grip slips before the swing carries you clear. You strike the shallows hard and drag yourself out with a painful shoulder.",
+            "facts": [
+              "briarfall-bridge-injury"
+            ],
+            "goto": "near-bank"
+          }
+        }
+      ]
+    },
+    "near-bank": {
+      "title": "🌿 The Near Bank",
+      "tone": "shore",
+      "text": "The damaged crossing is no longer worth trusting. Farther downstream, the reeds thin enough to offer another view of the sign.",
+      "resumeText": "You return to the near bank. The sign remains partly hidden across the channel.",
+      "choices": [
+        {
+          "id": "downstream-view",
+          "label": "Move downstream for a clearer view",
+          "emoji": "👀",
+          "success": {
+            "text": "From downstream, the lettering clears the branches: “HARROWMERE — 6 MILES.” Beneath it is a carved lantern.",
+            "facts": [
+              "briarfall-harrowmere-discovered",
+              "briarfall-lantern-emblem"
+            ],
+            "goto": "return-route"
+          },
+          "check": {
+            "skill": "perception",
+            "dc": 12
+          },
+          "failure": {
+            "text": "You see a lantern carved beneath the lettering, but cannot recover the settlement’s full name.",
+            "facts": [
+              "briarfall-lantern-emblem"
+            ],
+            "goto": "return-route"
+          }
+        },
+        {
+          "id": "leave",
+          "label": "Return with what you have learned",
+          "emoji": "↩️",
+          "outcome": {
+            "text": "You leave the crossing and head back toward the waystation.",
+            "goto": "return-route"
+          }
+        }
+      ]
+    },
+    "road-sign": {
+      "title": "🪧 The Forgotten Destination",
+      "tone": "landing",
+      "text": "The sign reads “HARROWMERE — 6 MILES.” Beneath the lettering is a lantern like those used around Wickhaven’s harbor. The northward road disappears beneath standing water. A shallow gravel bank offers a longer way back around the broken bridge.",
+      "resumeText": "You return to the Harrowmere sign and its carved lantern.",
+      "passive": {
+        "skill": "history",
+        "dc": 12,
+        "note": "Passive History {value} applied to the road sign.",
+        "success": {
+          "text": "You have seen no mention of Harrowmere on Wickhaven’s current road maps.",
+          "facts": [
+            "briarfall-unmapped-settlement"
+          ]
+        }
+      },
+      "choices": [
+        {
+          "id": "copy-sign",
+          "label": "Copy the name and lantern carving",
+          "emoji": "✍️",
+          "outcome": {
+            "text": "You copy Harrowmere’s name, its distance, and the lantern emblem, then follow the gravel bank back.",
+            "facts": [
+              "briarfall-harrowmere-discovered",
+              "briarfall-sign-recorded",
+              "briarfall-lantern-emblem"
+            ],
+            "goto": "return-route"
+          }
+        },
+        {
+          "id": "take-plank",
+          "label": "Remove the destination plank as evidence",
+          "emoji": "🪵",
+          "success": {
+            "text": "The rusted nails pull free. You carry the named plank back along the gravel bank.",
+            "facts": [
+              "briarfall-harrowmere-discovered",
+              "briarfall-sign-recovered",
+              "briarfall-lantern-emblem"
+            ],
+            "goto": "return-route"
+          },
+          "check": {
+            "skill": "athletics",
+            "dc": 12
+          },
+          "failure": {
+            "text": "The plank splits around its nails. You save a fragment bearing “Harrowmere” and leave the remaining sign standing.",
+            "facts": [
+              "briarfall-harrowmere-discovered",
+              "briarfall-sign-fragment"
+            ],
+            "goto": "return-route"
+          }
+        },
+        {
+          "id": "inspect-road",
+          "label": "Examine where the north road continues",
+          "emoji": "👣",
+          "success": {
+            "text": "Beyond the sign, the paving continues beneath the flood. Old wheel ruts show this was a regularly traveled road, not a forgotten footpath.",
+            "facts": [
+              "briarfall-harrowmere-discovered",
+              "briarfall-established-road"
+            ],
+            "goto": "return-route"
+          },
+          "check": {
+            "skill": "survival",
+            "dc": 13
+          },
+          "failure": {
+            "text": "The water hides the road after a few yards. You record the destination but cannot determine whether the route remains passable.",
+            "facts": [
+              "briarfall-harrowmere-discovered"
+            ],
+            "goto": "return-route"
+          }
+        }
+      ]
+    },
+    "return-route": {
+      "title": "🌊 The Return Route",
+      "tone": "shore",
+      "text": "Water covers the lowest stretch of road. A drainage ditch follows the fields uphill, while the higher embankment offers a rougher route. The waystation’s upper floor provides shelter until the ebb.",
+      "resumeText": "You return to the flooded approach. You can seek higher ground or wait for the tide to fall.",
+      "passive": {
+        "skill": "survival",
+        "dc": 12,
+        "note": "Passive Survival {value} applied to the return route.",
+        "success": {
+          "text": "The water has nearly reached its highest mark. Waiting upstairs should leave a safe road home.",
+          "facts": [
+            "briarfall-safe-ebb"
+          ]
+        }
+      },
+      "choices": [
+        {
+          "id": "ditch",
+          "label": "Follow the drainage ditch uphill",
+          "emoji": "🌾",
+          "success": {
+            "text": "The ditch leads to a dry field path. You reach Wickhaven’s outskirts safely.",
+            "goto": "report"
+          },
+          "check": {
+            "skill": "survival",
+            "dc": 13
+          },
+          "failure": {
+            "text": "The ditch ends in deep water. You retreat to the waystation and wait upstairs until the road clears.",
+            "facts": [
+              "briarfall-delayed-return"
+            ],
+            "goto": "report"
+          }
+        },
+        {
+          "id": "high-ground",
+          "label": "Climb back along the embankment",
+          "emoji": "🧗",
+          "success": {
+            "text": "You cross the broken sections and reach dry ground above the road.",
+            "goto": "report"
+          },
+          "check": {
+            "skill": "athletics",
+            "dc": 13
+          },
+          "failure": {
+            "text": "Loose earth gives way beneath you. You return to the waystation rather than risk another fall and wait for the ebb.",
+            "facts": [
+              "briarfall-delayed-return"
+            ],
+            "goto": "report"
+          }
+        },
+        {
+          "id": "wait",
+          "label": "Wait upstairs for the ebb",
+          "emoji": "⏳",
+          "outcome": {
+            "text": "You wait above the flood until the road reappears, then return safely.",
+            "facts": [
+              "briarfall-delayed-return"
+            ],
+            "goto": "report"
+          }
+        }
+      ]
+    },
+    "report": {
+      "title": "📜 The Road Report",
+      "tone": "landing",
+      "text": "You reach Wickhaven with your notes from Briarfall Road. The abandoned belongings and the road beyond the bridge deserve a place in the Ledger.",
+      "resumeText": "Your road discoveries are ready to record.",
+      "choices": [
+        {
+          "id": "finish",
+          "label": "Record findings and complete the expedition",
+          "emoji": "📜",
+          "outcome": {
+            "text": "You enter your Briarfall Road discoveries in the Ledger. This expedition is complete.",
+            "goto": "@complete"
+          },
+          "style": "success"
+        },
+        {
+          "id": "retreat",
+          "label": "Leave the report unfinished",
+          "emoji": "↩️",
+          "outcome": {
+            "text": "Your discoveries remain saved, but the expedition is unfinished.",
+            "goto": "@retreat"
+          },
+          "style": "secondary"
+        }
       ]
     }
   }

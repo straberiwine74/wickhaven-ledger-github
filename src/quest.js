@@ -130,7 +130,20 @@ export class QuestStore {
     const approved=await db.query(`SELECT 1 FROM ledger_test_characters WHERE guild_id=$1 AND player_id=$2 AND sheet_id=$3 AND status='approved'`,[s.guild,s.player,s.character.slice(7)]);
     requireValue(approved.rows.length,'This imported sheet needs Ledger TEST approval first.');
     const existing=(await db.query(`SELECT * FROM ledger_quest_test_runs WHERE guild_id=$1 AND player_id=$2 AND character_id=$3 AND NOT finished`,[s.guild,s.player,s.character])).rows[0];
-    if(existing) {await db.query('COMMIT');return existing;}
+    if(existing) {
+      // One open expedition per character: resume it, whatever quest code was typed.
+      const openQuest=existing.snapshot.quest??'drowned-watch';
+      if(openQuest!==s.quest) {const e=new Error('Unfinished expedition elsewhere.');e.hint=`${s.name.replace(/[*_~`]/g,'')} still has an unfinished ${getQuest(openQuest)?.name??openQuest} expedition. Run \`!depart ${openQuest}\` to return to it and finish it first.`;throw e;}
+      await db.query('COMMIT');return existing;
+    }
+    const lock=getQuest(s.quest)?.requires;
+    if(lock) {
+      const server=lock.scope==='server';
+      for(const fact of lock.facts) {
+        const found=(await db.query(`SELECT 1 FROM ledger_quest_test_knowledge WHERE guild_id=$1 AND fact=$2${server?'':' AND character_id=$3'} LIMIT 1`,server?[s.guild,fact]:[s.guild,fact,s.character])).rows.length;
+        if(!found) {const e=new Error('This quest isn\u2019t open yet.');e.hint=lock.hint;throw e;}
+      }
+    }
     requireValue(s.hp>0,'Recover HP before starting a new expedition.');
     const pending=(await db.query(`SELECT run_id FROM ledger_quest_test_receipts WHERE guild_id=$1 AND character_id=$2 AND status='pending' LIMIT 1`,[s.guild,s.character])).rows[0];
     requireValue(!pending,'Reconcile the previous expedition receipt before a new departure.');

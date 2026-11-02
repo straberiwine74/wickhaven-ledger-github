@@ -4,16 +4,17 @@
 // goto names the next scene. Omit goto to remain in the current scene.
 // @complete finishes the run; @retreat leaves it unfinished.
 // Sleight of Hand uses the engine key sleightOfHand.
-// This module follows the supplied quest schema; the full engine was not supplied.
+// This module follows the supplied quest schema. Status options: test, live, hidden
 
 export default {
   "id": "drowned-watch",
   "name": "Drowned Watch",
   "emoji": "🗼",
-  "status": "test",
+  "status": "live",
   "start": "shore",
   "completion": {
     "milestone": "watch-reconnaissance",
+	"ap": 1,
     "first": " First reconnaissance recorded (journal only; no AP or gold).",
     "repeat": " Repeat visit recorded. No additional reward."
   },
