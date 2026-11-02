@@ -3,6 +3,7 @@
 All AP and approvals remain test records. Existing balances, submissions and Tupper registrations are preserved.
 
 ## Latest changes
+- Drowned Watch TEST: the landing now offers one optional paid choice, "Leave 1 gp in the tide-box (spends 1 gp)", for bag-based departures with at least 1 gp. It records the tide-rota observation, can be bought once per visit, and leaves a pending receipt. After updating Avrae, run !depart reconcile <run id>; new departures stay blocked until the exported coins match. All free paths are unchanged.
 - RP samples are no longer required or displayed.
 - Review post titles contain only the character name; existing titles are repaired automatically.
 - Request Changes saves Changes Requested, never Approved, and sends the player a DM containing the staff note and review-post link.

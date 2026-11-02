@@ -1,5 +1,5 @@
 import { randomInt, randomUUID } from 'node:crypto';
-import { importBags, hasResourceChanges, matchesEnding, resourceReceipt } from './quest-resources.js';
+import { importBags, hasResourceChanges, matchesEnding, resourceReceipt, spendResources } from './quest-resources.js';
 
 export const skillNames = ['athletics','stealth','investigation','perception'];
 function requireValue(ok, message) { if (!ok) throw new Error(message); }
@@ -84,6 +84,13 @@ export const questSchema = [
   `CREATE TABLE IF NOT EXISTS ledger_quest_test_receipts (run_id text PRIMARY KEY REFERENCES ledger_quest_test_runs(id), guild_id text NOT NULL, player_id text NOT NULL, character_id text NOT NULL, receipt jsonb NOT NULL, status text NOT NULL CHECK(status IN ('pending','no-change','verified')), verified_at timestamptz, created_at timestamptz NOT NULL DEFAULT now())`
 ];
 
+// One explicitly offered, scene-owned cost. Bag (v2) runs only: v1 manifest
+// runs have no reconciliation path, so a cost there could never be cleared.
+export const tideBoxCost={coins:{gp:1}};
+export function tideBoxOffered(run) {
+  return run.snapshot?.v===2 && run.state.scene==='landing' && !run.state.tidebox && (run.state.coins?.gp??0)>=tideBoxCost.coins.gp;
+}
+
 export function transition(run, action, die = () => randomInt(1,21)) {
   const state = structuredClone(run.state), snapshot = run.snapshot;
   const draw = () => { const n=die(); requireValue(integer(n,1,20),'Invalid die.'); return n; };
@@ -113,6 +120,13 @@ export function transition(run, action, die = () => randomInt(1,21)) {
     state.alert = !success && action !== 'study';
     state.text=`${skillName}: ${dice.join(', ')} ${skill.mod<0?'-':'+'} ${Math.abs(skill.mod)} = ${total}.\n${result[action]}`;
     state.facts=[...(state.facts??[]),success?{climb:'culvert-submerges',sneak:'moon-marked-door',study:'culvert-low-tide'}[action]:'maintenance-route'];
+  } else if (action === 'tidebox' && state.scene === 'landing') {
+    requireValue(tideBoxOffered(run),'The tide-box offering is not available on this visit.');
+    const paid=spendResources(state,tideBoxCost);
+    paid.tidebox=true;
+    paid.text='You drop 1 gp through the slot of the old keeper\u2019s tide-box. The lid clicks open on a waxed slip: the Watch\u2019s last tide rota. The lower passage floods two hours before high water; the culvert clears an hour after the ebb.\n1 gp spent. It is listed in your supplies receipt.';
+    paid.facts=[...(paid.facts??[]),'tide-rota'];
+    return paid;
   } else if (action === 'finish' && state.scene === 'landing') {
     state.scene='complete'; state.text='You copy the Watch’s surviving harbor marks and return to Wickhaven. This short reconnaissance is complete. Your journal is saved.';
   } else throw new Error('That choice is no longer available. Use the latest buttons.');

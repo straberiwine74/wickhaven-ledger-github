@@ -1,12 +1,21 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
-import { QuestStore, verifyExport } from './quest.js';
-import { resourceReceipt, hasResourceChanges } from './quest-resources.js';
+import { QuestStore, verifyExport, tideBoxOffered } from './quest.js';
+import { resourceReceipt, hasResourceChanges, resourceDelta } from './quest-resources.js';
 import { runClickDiagnostic } from './quest-race.js';
 import { canReview } from './review-interactions.js';
 
 export function suppliesView(run) {
   const r=resourceReceipt(run),roll=r.lastRoll;
   return {content:'**Expedition supplies and receipt**',embeds:[{description:`${run.snapshot.name.replace(/[\*_~<>@`]/g,'')} • ${r.status}\nHP ${r.starting.hp} → ${r.current.hp}; temporary HP ${r.starting.tempHp} → ${r.current.tempHp}\n${Object.keys(r.current.coins).map(k=>`${k}: ${r.starting.coins[k]} → ${r.current.coins[k]}`).join(' • ')}\n${hasResourceChanges(run)?'Resource changes are listed in the attached receipt. Update Avrae manually; automatic write-back is not enabled.':'No resource changes. Nothing to copy back to Avrae.'}\n${roll?`Last saved roll: ${roll.skill}, dice ${roll.dice.join(', ')}, modifier ${roll.modifier}, total ${roll.total}.`:'No approach roll saved.'}\nInventory source: ${r.source}. All starting/current item quantities and changes are in the receipt. This view changes nothing.`}],files:[{attachment:Buffer.from(JSON.stringify(r,null,2)),name:`expedition-${run.id}.json`}],allowedMentions:{parse:[]}};
+}
+
+export function changeSummary(run) {
+  const d=resourceDelta(run),sign=n=>(n>0?'+':'')+n,clean=t=>String(t).replace(/[\*_~<>@`|]/g,''),out=[];
+  if(d.hp) out.push(`HP ${sign(d.hp)}`);
+  if(d.tempHp) out.push(`temporary HP ${sign(d.tempHp)}`);
+  for(const [k,v] of Object.entries(d.coins)) if(v) out.push(`${sign(v)} ${k}`);
+  for(const i of d.items) out.push(`${sign(i.delta)} × ${clean(i.name)}${i.bag?' ['+clean(i.bag)+']':''}`);
+  return out.join(', ')||'none';
 }
 
 export function departureFailure(stage,error) {
@@ -30,13 +39,13 @@ export function questView(run, knowledge=[]) {
     content+='\nTools, spells, reroll features and automatic resource write-back remain unsupported. Passive Perception is declared. Do not confirm incorrect data.';
   }
   if(knowledge.length) content+='\n**Known observations:** '+knowledge.map(k=>k.replaceAll('-',' ')).join('; ');
-  const choices={review:[['confirm','Confirm loadout'],['cancel','Discard unconfirmed departure']],shore:[['climb','Climb exposed stairs'],['sneak','Time the culvert crossing'],['study','Study harbor marks'],['retreat','Return to town']],landing:[['finish','Record findings & return'],['retreat','Retreat unfinished']],town:[['resume','Return to the Watch']],complete:[],cancelled:[]}[state.scene];
+  const choices={review:[['confirm','Confirm loadout'],['cancel','Discard unconfirmed departure']],shore:[['climb','Climb exposed stairs'],['sneak','Time the culvert crossing'],['study','Study harbor marks'],['retreat','Return to town']],landing:[['finish','Record findings & return'],...(tideBoxOffered(run)?[['tidebox','Leave 1 gp in the tide-box (spends 1 gp)']]:[]),['retreat','Retreat unfinished']],town:[['resume','Return to the Watch']],complete:[],cancelled:[]}[state.scene];
   const buttons=choices.map(([action,label])=>new ButtonBuilder().setCustomId(`quest:${run.id}:${run.revision}:${action}`).setLabel(label).setStyle(ButtonStyle.Secondary));
   const utility=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`quest:${run.id}:${run.revision}:supplies`).setLabel('View supplies & saved roll').setStyle(ButtonStyle.Secondary),new ButtonBuilder().setCustomId(`quest:${run.id}:${run.revision}:race`).setLabel('Staff: test simultaneous clicks').setStyle(ButtonStyle.Secondary));
   const payload={content:'**The Wickhaven Ledger • Expedition TEST**',embeds:[{description:content}],components:[...(buttons.length?[new ActionRowBuilder().addComponents(buttons)]:[]),utility],allowedMentions:{parse:[]}};
   if(state.scene==='review') payload.files=suppliesView(run).files;
   if(state.scene==='complete'&&hasResourceChanges(run)) {
-    payload.embeds.push({description:`Update your Avrae bags/HP/currency using the receipt, then verify with:\n\`!depart reconcile ${run.id}\`\nNew visits are blocked until the exported ending resources match. No automatic write-back occurs.`});
+    payload.embeds.push({description:`Changes to copy into Avrae: ${changeSummary(run)}\nUpdate your Avrae bags/HP/currency using the receipt, then verify with:\n\`!depart reconcile ${run.id}\`\nNew visits are blocked until the exported ending resources match. No automatic write-back occurs.`});
   }
   return payload;
 }

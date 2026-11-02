@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
 import { TestLedger } from '../src/store.js';
-import { QuestStore, validateSnapshot } from '../src/quest.js';
+import { QuestStore, validateSnapshot, transition, tideBoxOffered } from '../src/quest.js';
 import { BAG_COLLECTION, importBags, resources, resourceReceipt, spendResources, matchesEnding } from '../src/quest-resources.js';
-import { suppliesView, installQuests } from '../src/quest-discord.js';
+import { suppliesView, installQuests, questView } from '../src/quest-discord.js';
 import { runClickDiagnostic } from '../src/quest-race.js';
 
 const g='111111111111111111',p='222222222222222222';
@@ -92,3 +92,35 @@ test('failed synthetic diagnostics clean up only their own UUID-scoped records',
   assert.ok(deletes.every(c=>c.args[0]===id||c.args[0]===scope));
   await assert.rejects(runClickDiagnostic(pool),/another player/); // running guard released
 });
+test('tide-box offering is explicit, bag-runs only, spends exactly 1 gp once and leaves free paths unchanged',()=>{
+  const snapshot=validateSnapshot(input());
+  const run={id:'r',revision:2,snapshot,state:{scene:'landing',hp:20,tempHp:3,items:snapshot.loadout.items,coins:snapshot.coins}};
+  assert.equal(tideBoxOffered(run),true);
+  assert.ok(questView(run).components[0].components.some(b=>b.data.custom_id.endsWith(':tidebox')));
+  const paid=transition(run,'tidebox');assert.equal(paid.coins.gp,3);assert.equal(paid.scene,'landing');assert.ok(paid.facts.includes('tide-rota'));assert.equal(run.state.coins.gp,4);
+  const after={...run,state:paid};assert.equal(tideBoxOffered(after),false);assert.throws(()=>transition(after,'tidebox'),/not available/);
+  assert.ok(!questView(after).components[0].components.some(b=>b.data.custom_id.endsWith(':tidebox')));
+  const broke={...run,state:{...run.state,coins:{...run.state.coins,gp:0,sp:50}}};assert.equal(tideBoxOffered(broke),false);assert.throws(()=>transition(broke,'tidebox'),/not available/);
+  const v1={...run,snapshot:{...snapshot,v:1}};assert.equal(tideBoxOffered(v1),false);assert.throws(()=>transition(v1,'tidebox'),/not available/);
+  assert.throws(()=>transition({...run,state:{...run.state,scene:'shore'}},'tidebox'),/no longer available/);
+  const free=transition(run,'finish');assert.equal(free.coins.gp,4);
+});
+test('tide-box cost: simultaneous clicks spend once, receipt is pending, wrong export rejected, corrected export clears the gate',async()=>fixture(async({db,store})=>{
+  let run=await store.open(input());run=await store.act(run.id,g,p,0,'confirm');run=await store.act(run.id,g,p,1,'study');
+  const clicks=await Promise.all(Array.from({length:3},()=>store.act(run.id,g,p,2,'tidebox')));
+  assert.ok(clicks.every(r=>r.revision===3&&r.state.coins.gp===3));
+  assert.equal((await db.query(`SELECT count(*)::integer AS n FROM ledger_quest_test_events WHERE run_id=$1 AND action='tidebox'`,[run.id])).rows[0].n,1);
+  const stale=await store.act(run.id,g,p,2,'tidebox');assert.equal(stale.state.coins.gp,3);
+  await assert.rejects(store.act(run.id,g,p,3,'tidebox'),/not available/);
+  run=await store.act(run.id,g,p,3,'finish');assert.equal(run.state.scene,'complete');
+  const receipt=(await db.query('SELECT status,receipt FROM ledger_quest_test_receipts WHERE run_id=$1',[run.id])).rows[0];
+  assert.equal(receipt.status,'pending');assert.equal(receipt.receipt.changes.coins.gp,-1);assert.equal(receipt.receipt.starting.coins.gp,4);assert.equal(receipt.receipt.current.coins.gp,3);
+  const view=questView(run);assert.match(view.embeds[1].description,/-1 gp/);assert.match(view.embeds[1].description,new RegExp(`!depart reconcile ${run.id}`));
+  await assert.rejects(store.open(input()),/Reconcile/);
+  const unchanged=input();unchanged.reconcile=run.id;await assert.rejects(store.reconcile(unchanged),/do not match/);
+  const overpaid=input();overpaid.reconcile=run.id;overpaid.coins.gp=2;await assert.rejects(store.reconcile(overpaid),/do not match/);
+  await assert.rejects(store.open(input()),/Reconcile/);
+  const changed=input();changed.reconcile=run.id;changed.coins={pp:0,gp:2,ep:0,sp:10,cp:0};await store.reconcile(changed);
+  assert.equal((await db.query('SELECT status FROM ledger_quest_test_receipts WHERE run_id=$1',[run.id])).rows[0].status,'verified');
+  const next=input();next.coins.gp=3;const fresh=await store.open(next);assert.notEqual(fresh.id,run.id);assert.equal(fresh.snapshot.coins.gp,3);
+}));
