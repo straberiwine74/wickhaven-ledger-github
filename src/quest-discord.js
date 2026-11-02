@@ -1,11 +1,12 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
-import { QuestStore, verifyExport } from './quest.js';
+import { QuestStore, verifyExport, questChannels } from './quest.js';
+import { getQuest } from './quests/index.js';
 import { questOf, choicesFor } from './quest-engine.js';
 import { SKILLS, checksUsed } from './quest-schema.js';
 import { resourceReceipt, hasResourceChanges, resourceDelta } from './quest-resources.js';
 import { runClickDiagnostic } from './quest-race.js';
 import { canReview } from './review-interactions.js';
-import { card, message, notice, clean, signed, fitLines } from './ui.js';
+import { card, message, notice, clean, signed, fitLines, testNote } from './ui.js';
 
 const coinKeys=['pp','gp','ep','sp','cp'];
 const questName=run=>{try{return questOf(run).name;}catch{return 'Expedition';}};
@@ -54,7 +55,7 @@ const safeMessages=new Set(['Departure data was truncated or malformed.','Unsupp
   'Invalid carried bags.','Invalid bag item.','Too many carried item entries.','Invalid expedition coin source.','Invalid reconciliation reference.','Recover HP before starting a new expedition.','Reconcile the previous expedition receipt before a new departure.','No matching completed bag expedition receipt.','Exported bags, HP or currency do not match the ending receipt.']);
 export function departureFailure(stage,error) {
   const m=String(error?.message??'');
-  const safe=safeMessages.has(m)||/^Invalid [A-Za-z ]{2,40}\.$/.test(m)||/^This character export has no [A-Za-z ]{2,40}\./.test(m)||['This quest is not available.','Departure data is missing the full character sheet.'].includes(m);
+  const safe=safeMessages.has(m)||/^Invalid [A-Za-z ]{2,40}\.$/.test(m)||/^This character export has no [A-Za-z ]{2,40}\./.test(m)||['This quest is not available.','This quest is still in testing.','Departure data is missing the full character sheet.'].includes(m);
   const detail=safe?m:'The check did not complete. Staff can inspect the bot log.';
   return notice('⛔ Departure stopped',`**${detail}**`,'danger',[
     {name:'Stopped at',value:title(stage),inline:true},
@@ -89,7 +90,7 @@ export function reviewEmbed(run,knowledge=[]) {
   return card({
     title:`${questName(run)} — Departure Review`,
     url:`https://www.dndbeyond.com/characters/${s.character.slice(7)}`,
-    description:`**${clean(s.name)}** is ready to set out. Review everything below. **Confirming locks this expedition.**\n*TEST only: no AP, gold, or sheet write-back.*`,
+    description:`**${clean(s.name)}** is ready to set out. Review everything below. **Confirming locks this expedition.**${(()=>{try{return questOf(run).status==='live'?'\n*No automatic sheet write-back: you update Avrae yourself.*':'\n*TEST quest: no AP, gold, or sheet write-back.*';}catch{return '';}})()}`,
     tone:low?'warning':'info',fields,
     footer:'Tools, spells, and reroll features aren’t supported yet. If anything is wrong, discard and fix it in Avrae.'
   });
@@ -143,7 +144,7 @@ export function questView(run, knowledge=[]) {
 export async function installQuests(client,pool,config) {
   const store=new QuestStore(pool); await store.init();
   client.on('messageCreate',async message=>{
-    if(message.guildId!==config.guild || message.channelId!==config.channel || message.author.id!==config.avrae || !message.author.bot || message.webhookId) return;
+    if(message.guildId!==config.guild || !questChannels(config).includes(message.channelId) || message.author.id!==config.avrae || !message.author.bot || message.webhookId) return;
     const embed=message.embeds.find(e=>e.title==='BTLL departure v1');
     if(!embed) return;
     let stage='export format';
@@ -158,6 +159,7 @@ export async function installQuests(client,pool,config) {
         const run=await store.reconcile(s);
         const supplies=suppliesView(run);await message.reply({...supplies,embeds:[card({title:'✅ Ending resources verified',description:'The fresh Avrae export matches the completed expedition. **You can depart again.**',tone:'success',footer:runFooter(run)}),...supplies.embeds]});return;
       }
+      if(message.channelId!==config.channel&&getQuest(s.quest)?.status!=='live') throw new Error('This quest is still in testing.');
       stage='Ledger approval and expedition save';
       const run=await store.open(s);
       stage='confirmation message';
@@ -172,7 +174,7 @@ export async function installQuests(client,pool,config) {
     if(!interaction.isButton() || !interaction.customId.startsWith('quest:')) return;
     try {
       await interaction.deferReply({flags:MessageFlags.Ephemeral});
-      if(interaction.guildId!==config.guild || interaction.channelId!==config.channel) {await interaction.editReply(notice('Wrong channel','Use these expedition buttons in the quest test channel.','neutral'));return;}
+      if(interaction.guildId!==config.guild || !questChannels(config).includes(interaction.channelId)) {await interaction.editReply(notice('Wrong channel','Use these expedition buttons in the quest test channel.','neutral'));return;}
       const [,id,revision,action]=interaction.customId.split(':');
       if(!/^\d+$/.test(revision)) throw new Error('Invalid expedition button.');
       if(action==='supplies') {

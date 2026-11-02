@@ -21,6 +21,14 @@ export function checksUsed(quest) {
   return [...new Set(out.values())];
 }
 
+// Milestones worth 1 AP: completion.ap and any outcome with milestone + ap.
+// AP is only awarded while the quest's status is 'live'.
+export function apMilestones(quest) {
+  const out=new Set();if(quest.completion?.ap) out.add(quest.completion.milestone);
+  for(const scene of Object.values(quest.scenes)) for(const c of scene.choices) for(const o of [c.outcome,c.success,c.failure]) if(o?.milestone&&o.ap) out.add(o.milestone);
+  return out;
+}
+
 export function validateQuest(q) {
   const where=[];const bad=m=>{throw new Error(`Quest ${q?.id??'?'}${where.length?' '+where.join(' > '):''}: ${m}`);};
   const ok=(cond,m)=>{if(!cond)bad(m);};
@@ -30,12 +38,14 @@ export function validateQuest(q) {
   ok(q.scenes&&typeof q.scenes==='object'&&Object.keys(q.scenes).length,'needs scenes');
   ok(Object.hasOwn(q.scenes,q.start),'start must name a scene');
   ok(q.completion&&id.test(q.completion.milestone),'needs completion.milestone');
+  ok(q.completion.ap===undefined||q.completion.ap===1,'completion.ap can only be 1');
   for(const reserved of ['review','town',...TERMINAL]) ok(!Object.hasOwn(q.scenes,reserved),`scene id "${reserved}" is reserved`);
   const checkOk=c=>ok(c&&Number.isInteger(c.dc)&&c.dc>=1&&c.dc<=40&&[c.skill,c.save,c.ability].filter(Boolean).length===1&&(c.skill?Object.hasOwn(SKILLS,c.skill):Object.hasOwn(ABILITIES,c.save??c.ability)),'check needs exactly one valid skill, save or ability and a dc');
   const outcomeOk=o=>{
     ok(o&&typeof o.text==='string'&&o.text.length>0&&o.text.length<=1800,'outcome needs text up to 1800 characters');
     ok(!o.goto||o.goto==='@complete'||o.goto==='@retreat'||Object.hasOwn(q.scenes,o.goto),`goto "${o.goto}" is not a scene`);
     ok(!o.facts||o.facts.every(f=>id.test(f)),'facts must be lowercase ids');
+    ok(o.ap===undefined||(o.ap===1&&o.milestone),'ap: 1 needs a milestone on the same outcome');
     ok(o.damage===undefined||(Number.isInteger(o.damage)&&o.damage>0&&o.damage<=100)||/^\d{1,2}d(4|6|8|10|12)([+]\d{1,2})?$/.test(o.damage),'damage must be a number or dice such as 1d6+1');
   };
   for(const [sid,scene] of Object.entries(q.scenes)) {

@@ -1,25 +1,25 @@
 import { UserError, staffAllowed } from './admin.js';
 import { serverDay } from './activity.js';
 import { characterCommands, handleCharacterCommand } from './character-commands.js';
-import { card, message, clean } from './ui.js';
+import { card, message, clean, testNote } from './ui.js';
 
 const stringOption = (name, description, required = true, max_length = 80) => ({ type: 3, name, description, required, max_length });
 export const commands = [
   ...characterCommands,
-  { name: 'ledger-ap', description: 'View your separate test AP balance' },
+  { name: 'ledger-ap', description: 'View your AP balance and progress' },
   { name: 'ledger-tupper', description: 'Register your own Tupper brackets with the Ledger', options: [
     { type: 1, name: 'register', description: 'Add or update your own bracket registration', options: [
       stringOption('name','Character label'), stringOption('prefix','Opening bracket, e.g. R:',false,32), stringOption('suffix','Closing bracket, if any',false,32)] },
     { type: 1, name: 'list', description: 'List your registrations' },
     { type: 1, name: 'remove', description: 'Remove one of your registrations', options: [stringOption('name','Registered character label')] }
   ] },
-  { name: 'ledger-adjust', description: 'Staff: adjust TEST AP with a recorded reason', default_member_permissions: '0', options: [
+  { name: 'ledger-adjust', description: 'Staff: adjust a player\u2019s AP with a recorded reason', default_member_permissions: '0', options: [
     { type: 6, name: 'player', description: 'Player to adjust', required: true },
     { type: 4, name: 'change', description: 'AP to add or remove, -4 through +4', required: true, min_value: -4, max_value: 4 },
     stringOption('reason','Reason for the correction; no sensitive scene text',true,300),
     stringOption('day','YYYY-MM-DD; defaults to today in America/Chicago',false,10)
   ] },
-  { name: 'ledger-audit', description: 'Staff: review recent TEST AP adjustments', default_member_permissions: '0', options: [
+  { name: 'ledger-audit', description: 'Staff: review recent AP adjustments', default_member_permissions: '0', options: [
     { type: 6, name: 'player', description: 'Player to review', required: true }
   ] }
 ];
@@ -60,7 +60,7 @@ export async function handleCommand(interaction, ledger, guildId) {
       fields:rows.slice(0,20).map(r=>({name:`${r.day} • ${r.delta > 0 ? '+' : ''}${r.delta} AP (${r.before_ap} → ${r.after_ap})`,value:`${clean(r.reason)}\nModerator: <@${r.moderator_id}>`}))}));
   }
   const s = await ledger.status(guildId,playerId);
-  return message(card({title:'📒 Your AP',description:'*TEST ledger: this isn\u2019t real progression yet.*',tone:'info',fields:[
+  return message(card({title:'📒 Your AP',description:testNote('*TEST ledger: this isn\u2019t real progression yet.*')||'Your progress toward new character slots.',tone:'info',fields:[
     {name:'Today',value:`**${s.today}** / 4 AP`,inline:true},{name:'Total',value:`**${s.total}** AP`,inline:true},{name:'Active days',value:`**${s.active_days}**`,inline:true},
     {name:'Words toward next AP',value:`${s.remainder} / 300`,inline:true},{name:'Daily reset',value:'Midnight, Chicago time',inline:true}]}));
 }

@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { importBags, hasResourceChanges, matchesEnding, resourceReceipt } from './quest-resources.js';
 import { transition, defaultDie, questOf, available, isTerminal } from './quest-engine.js';
 import { getQuest } from './quests/index.js';
-import { SKILLS, ABILITIES, LEGACY_SKILLS } from './quest-schema.js';
+import { SKILLS, ABILITIES, LEGACY_SKILLS, apMilestones } from './quest-schema.js';
+import { awardGameplayAP, awardSchema } from './store.js';
 export { transition };
 
 export const skillNames = LEGACY_SKILLS;
@@ -68,6 +69,10 @@ export function parseVerificationResponse(body) {
   return result;
 }
 
+// config.channel is the staff test channel; config.liveChannel (optional) is the
+// player-facing departures channel, where only quests with status 'live' run.
+export const questChannels=config=>[config.channel,config.liveChannel].filter(Boolean);
+
 export async function verifyExport(s, message, config, verify = async signature => {
   const response = await fetch('https://api.avrae.io/bot/signature/verify', {
     method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({signature}), signal:AbortSignal.timeout(10000)
@@ -79,7 +84,7 @@ export async function verifyExport(s, message, config, verify = async signature 
 }) {
   validateSnapshot(s);
   requireValue(message.author.bot && !message.webhookId && message.author.id === config.avrae, 'Only configured Avrae exports are accepted.');
-  requireValue(s.guild === config.guild && s.channel === config.channel && message.guildId === s.guild && message.channelId === s.channel, 'Wrong export channel/server.');
+  requireValue(s.guild === config.guild && questChannels(config).includes(s.channel) && message.guildId === s.guild && message.channelId === s.channel, 'Wrong export channel/server.');
   requireValue(Date.now() - message.createdTimestamp >= -5000 && Date.now() - message.createdTimestamp < 300000, 'Export expired. Run departure again.');
   const proof = await verify(s.signature);
   requireValue(proof.scope === 'SERVER_ALIAS', 'Avrae did not verify a server-alias invocation.');
@@ -114,7 +119,7 @@ export function tideBoxOffered(run) {
 
 export class QuestStore {
   constructor(pool, die=defaultDie) { this.pool=pool; this.die=die; }
-  async init() { for (const sql of questSchema) await this.pool.query(sql); }
+  async init() { for (const sql of questSchema) await this.pool.query(sql); await this.pool.query(awardSchema); }
   async open(s) {
     s=validateSnapshot(s);
     const db=await this.pool.connect();
@@ -165,11 +170,19 @@ export class QuestStore {
       if(ended) {
         const quest=questOf(run);
         // Milestones are journal records today; real AP is attached to them later.
-        for(const m of state.milestones??[]) await db.query(`INSERT INTO ledger_quest_test_rewards VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`,[guild,run.character_id,m,id]);
-        if(state.scene==='complete') {
-          const reward=await db.query(`INSERT INTO ledger_quest_test_rewards VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING reward`,[guild,run.character_id,quest.completion.milestone,id]);
-          state.text+=reward.rows.length?quest.completion.first:quest.completion.repeat;
+        const reached=[...(state.milestones??[]),...(state.scene==='complete'?[quest.completion.milestone]:[])];
+        const paying=quest.status==='live'?apMilestones(quest):new Set();let ap=0,capped=0;
+        for(const m of reached) {
+          const fresh=(await db.query(`INSERT INTO ledger_quest_test_rewards VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING reward`,[guild,run.character_id,m,id])).rows.length>0;
+          if(m===quest.completion.milestone) state.text+=fresh?quest.completion.first:quest.completion.repeat;
+          if(fresh&&paying.has(m)) {
+            const r=await awardGameplayAP(db,{guildId:guild,playerId:run.player_id,source:'quest',ref:`quest:${run.character_id}:${m}`,detail:`${quest.id} ${m}`});
+            ap+=r.awarded;if(r.capped) capped++;
+          }
         }
+        state.apAwarded=ap;state.apCapped=capped;
+        if(ap) state.text+=`\n**+${ap} AP** for ${ap===1?'a first-time milestone':'first-time milestones'}.`;
+        if(capped) state.text+=`\nDaily AP cap reached: ${capped===1?'that milestone was':'those milestones were'} recorded without AP.`;
       }
       await db.query('INSERT INTO ledger_quest_test_events(run_id,revision,action,state) VALUES($1,$2,$3,$4)',[id,revision+1,action,JSON.stringify(state)]);
       const saved=(await db.query('UPDATE ledger_quest_test_runs SET state=$2,revision=revision+1,finished=$3 WHERE id=$1 RETURNING *',[id,JSON.stringify(state),isTerminal(state.scene)])).rows[0];

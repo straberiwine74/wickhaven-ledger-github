@@ -3,6 +3,9 @@
 All AP and approvals remain test records. Existing balances, submissions and Tupper registrations are preserved.
 
 ## Latest changes
+- Live AP (`LEDGER_LIVE=true`): Tupper posts in every in-character channel and forum thread earn AP for players with an approved character. OOC, setup, rules and staff spaces are excluded (list in `src/live.js`, override with `AP_EXCLUDED_IDS`). Bracket registration now requires an approved character. Awards and held messages are logged to `AP_LOG_CHANNEL_ID`, never in the scene. Existing TEST AP and approvals carry over unchanged.
+- Gameplay AP: quests marked `status:'live'` award 1 AP for each first-time milestone with `ap: 1` (including `completion.ap`). `!mine`, or `!hunt end`, confirmed by Avrae's reply in `MINING_CHANNEL_ID` / `HUNTING_CHANNEL_ID`, awards 1 AP per player per day. Everything shares the 4 AP/day cap; a capped award is recorded without AP and can't be claimed again.
+- Fixed: the "Writing saved" report failed to post after the card update (a naming clash in bot.js).
 - Quest engine: quests are now data files in `src/quests/` run by `src/quest-engine.js`. The Drowned Watch was converted with the same scene and choice ids, so unfinished runs continue. Supports skill checks, saving throws, ability checks, advantage, passives, damage (fixed or dice), going down at 0 HP, once-per-visit choices, costs, milestones, and choices unlocked by earlier discoveries.
 - Full character export: `avrae/depart-alias.txt` (v3) exports all 18 skills, 6 saves, 6 ability checks, ability scores, level, HP, carried bags and coins. Passive Perception uses `ledger_passive_perception` if set, otherwise 10 + Perception (±5 for advantage/disadvantage). The bot still accepts v1/v2 exports. `!depart <quest code>` works for any registered quest.
 - Every Ledger message (expeditions, supplies, departures, AP, Tupper brackets, character submissions and reviews, staff adjustments, DMs and channel reports) now uses the shared card style in `src/ui.js`. Review-post lookup still works for existing posts.
@@ -16,6 +19,9 @@ All AP and approvals remain test records. Existing balances, submissions and Tup
 - Resubmit reuses saved links and options. If those changed, run submit again with the same name to replace them.
 - Only administrators and configured Moderators can approve or request changes. Only the submitting player can resubmit. Staff may explicitly return an approved record for corrections. Its original first-approval date remains historical; it does not count as currently approved until reapproved.
 
+## Going live
+Set these in Vercel, then redeploy: `LEDGER_LIVE=true`, `AP_LOG_CHANNEL_ID` (staff-only log), `HUNTING_CHANNEL_ID`, `MINING_CHANNEL_ID`, and optionally `QUEST_CHANNEL_ID` (where players run `!depart` for live quests). Test quests keep running only in `QUEST_TEST_CHANNEL_ID`.
+
 ## Writing a quest
 1. Copy `src/quests/drowned-watch.js` to `src/quests/<quest-code>.js` and change the id, name, scenes and text.
 2. Add it to the list in `src/quests/index.js`.
@@ -25,7 +31,7 @@ Scene choices (max 5 per scene) are one of:
 - **Check:** `check:{skill:'stealth'|save:'dex'|ability:'str', dc:13}` with `success` and `failure` outcomes.
 - **Plain:** `outcome:{...}` with no roll.
 
-Outcomes can set `text`, `goto` (a scene id, `@complete` or `@retreat`), `facts` (saved to the character forever), `flags` (this visit only), `milestone`, and `damage` (number or dice like `1d6+1`; reaching 0 HP ends the visit as **Carried Home**).
+Outcomes can set `ap: 1` together with a `milestone` (and `completion.ap: 1`) to award AP once per character when the quest's status is `live`. Outcomes can also set `text`, `goto` (a scene id, `@complete` or `@retreat`), `facts` (saved to the character forever), `flags` (this visit only), `milestone`, and `damage` (number or dice like `1d6+1`; reaching 0 HP ends the visit as **Carried Home**).
 Choice options: `requires:{facts:[...], notFacts:[...], flags:{...}, minLevel:3, bags:true}`, `cost:{coins:{gp:1}, items:[...], hp:2}`, `once:true`, `style`, `emoji`. A scene can add `passive:{skill, dc, success:{text, facts}}`.
 
 ## Avrae departure alias

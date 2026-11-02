@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { ActionRowBuilder,ButtonBuilder,ButtonStyle,ChannelType } from 'discord.js';
 import { UserError } from './admin.js';
-import { card } from './ui.js';
+import { card, testNote } from './ui.js';
 
 export const reviewKey=c=>createHash('md5').update(`${c.guild_id}:${c.player_id}:${c.name_key}`).digest('hex');
 const clean=s=>s.replace(/[\r\n]/g,' ').slice(0,100);
@@ -24,7 +24,7 @@ export function reviewPayload(c,roleId,note=''){
   if(note)fields.push({name:c.status==='rejected'?'✏️ Changes requested by staff':'Staff review note',value:note});
   if(c.status==='rejected')fields.push({name:'Player next step',value:'Update your character, then click **Resubmit Changes**. The review returns to Pending and Moderators are alerted. If your links or options changed, use `/ledger-character submit` again.'});
   // Keep "Review <key> • Revision <n>" at the end of the footer: post lookup depends on it.
-  const embed=card({title:`🧙 Character review: ${c.name}`,description:`**Status: ${status}**\nPlayer: <@${c.player_id}>\n*TEST system: not a live approval.*`,tone:{pending:'pending',approved:'success',rejected:'warning'}[c.status],fields,footer:`Review ${key} • Revision ${c.revision}`});
+  const embed=card({title:`🧙 Character review: ${c.name}`,description:`**Status: ${status}**\nPlayer: <@${c.player_id}>${testNote('\n*TEST system: not a live approval.*')}`,tone:{pending:'pending',approved:'success',rejected:'warning'}[c.status],fields,footer:`Review ${key} • Revision ${c.revision}`});
   const row=new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`char-review:approved:${key}:${c.revision}`).setLabel('Approve').setStyle(ButtonStyle.Success).setDisabled(c.status!=='pending'),
     new ButtonBuilder().setCustomId(`char-review:rejected:${key}:${c.revision}`).setLabel('Request Changes').setStyle(ButtonStyle.Secondary).setDisabled(c.status==='rejected'),

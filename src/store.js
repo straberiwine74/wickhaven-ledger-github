@@ -2,8 +2,37 @@ import { creditWriting, serverDay } from './activity.js';
 import { UserError, registrationInput, adjustmentInput } from './admin.js';
 import { CharacterStore, characterSchema } from './character-store.js';
 
+export const awardSchema = `CREATE TABLE IF NOT EXISTS ledger_ap_awards (
+  guild_id text NOT NULL, ref text NOT NULL, player_id text NOT NULL, day text NOT NULL,
+  source text NOT NULL CHECK (source IN ('quest','gathering')), awarded integer NOT NULL CHECK (awarded BETWEEN 0 AND 1),
+  detail text NOT NULL DEFAULT '', created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (guild_id, ref))`;
+
+export async function isApproved(db, guildId, playerId) {
+  return (await db.query("SELECT 1 FROM ledger_test_characters WHERE guild_id=$1 AND player_id=$2 AND status='approved' LIMIT 1", [guildId, playerId])).rows.length > 0;
+}
+
+// Gameplay AP (quest milestones, daily gathering) under the shared 4 AP/day cap.
+// Runs inside the caller's transaction. `ref` makes every award happen once:
+// quest:<character>:<milestone> or gathering:<player>:<day>. A capped award
+// is still recorded (awarded 0) so it can't be farmed later.
+export async function awardGameplayAP(db, { guildId, playerId, source, ref, detail = '', time = Date.now() }) {
+  const day = serverDay(new Date(time));
+  await db.query('INSERT INTO ledger_test_players (guild_id,player_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [guildId, playerId]);
+  await db.query('SELECT remainder FROM ledger_test_players WHERE guild_id=$1 AND player_id=$2 FOR UPDATE', [guildId, playerId]);
+  const prior = (await db.query('SELECT awarded,day FROM ledger_ap_awards WHERE guild_id=$1 AND ref=$2', [guildId, ref])).rows[0];
+  if (prior) return { duplicate: true, awarded: 0, day: prior.day };
+  await db.query('INSERT INTO ledger_test_days (guild_id,player_id,day) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [guildId, playerId, day]);
+  const before = (await db.query('SELECT ap FROM ledger_test_days WHERE guild_id=$1 AND player_id=$2 AND day=$3', [guildId, playerId, day])).rows[0].ap;
+  const awarded = before < 4 ? 1 : 0;
+  if (awarded) await db.query('UPDATE ledger_test_days SET ap=ap+1 WHERE guild_id=$1 AND player_id=$2 AND day=$3', [guildId, playerId, day]);
+  await db.query('INSERT INTO ledger_ap_awards (guild_id,ref,player_id,day,source,awarded,detail) VALUES ($1,$2,$3,$4,$5,$6,$7)', [guildId, ref, playerId, day, source, awarded, detail.slice(0, 200)]);
+  return { duplicate: false, awarded, day, dailyAP: before + awarded, capped: !awarded };
+}
+
 export class TestLedger {
-  constructor(pool) { this.pool = pool; this.characters = new CharacterStore(pool); }
+  // requireApproval: live mode. Only players with an approved character earn
+  // writing AP or may register Tupper brackets.
+  constructor(pool, { requireApproval = false } = {}) { this.pool = pool; this.requireApproval = requireApproval; this.characters = new CharacterStore(pool); }
   async init() {
     const db = await this.pool.connect();
     try {
@@ -32,12 +61,14 @@ export class TestLedger {
         before_ap integer NOT NULL, after_ap integer NOT NULL, reason text NOT NULL,
         created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (guild_id,request_id))`);
       for (const sql of characterSchema) await db.query(sql);
+      await db.query(awardSchema);
       await db.query('COMMIT');
     } catch (e) { await db.query('ROLLBACK'); throw e; }
     finally { db.release(); }
   }
   async register(guildId, playerId, name, prefix, suffix = '') {
     const input = registrationInput(name, prefix, suffix);
+    if (this.requireApproval && !(await isApproved(this.pool, guildId, playerId))) throw new UserError('Register your Tupper brackets after your first character is approved. Submit one with /ledger-character submit.');
     try {
       await this.pool.query(`INSERT INTO ledger_proxy_registrations (guild_id,player_id,name_key,name,prefix,suffix)
         VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (guild_id,player_id,name_key)
@@ -88,6 +119,7 @@ export class TestLedger {
       const account = await db.query('SELECT remainder FROM ledger_test_players WHERE guild_id=$1 AND player_id=$2 FOR UPDATE', [guildId, playerId]);
       const duplicate = await db.query('SELECT 1 FROM ledger_test_events WHERE guild_id=$1 AND (original_id=$2 OR proxy_id=$3)', [guildId, originalId, proxyId]);
       if (duplicate.rows.length) { await db.query('ROLLBACK'); return { duplicate: true }; }
+      if (this.requireApproval && !(await isApproved(db, guildId, playerId))) { await db.query('ROLLBACK'); return { duplicate: false, ineligible: true, awarded: 0 }; }
       // Delayed older-day events cannot retroactively consume newer-day carryover.
       const latest = await db.query('SELECT max(day) AS day FROM ledger_test_events WHERE guild_id=$1 AND player_id=$2', [guildId, playerId]);
       if (latest.rows[0].day && day < latest.rows[0].day) throw new Error('Out-of-order day requires review');
@@ -101,6 +133,11 @@ export class TestLedger {
       return { ...result, duplicate: false };
     } catch (e) { await db.query('ROLLBACK'); throw e; }
     finally { db.release(); }
+  }
+  async awardGameplay(args) {
+    const db = await this.pool.connect();
+    try { await db.query('BEGIN'); const r = await awardGameplayAP(db, args); await db.query('COMMIT'); return r; }
+    catch (e) { await db.query('ROLLBACK'); throw e; } finally { db.release(); }
   }
   async status(guildId, playerId, time = Date.now()) {
     const result = await this.pool.query(`SELECT
