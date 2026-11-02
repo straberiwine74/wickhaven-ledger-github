@@ -46,7 +46,7 @@ test('receipts contain exact starting/current values and match equivalent coin c
   const receipt=resourceReceipt(run);assert.equal(receipt.changes.hp,-1);assert.equal(receipt.changes.tempHp,-3);assert.equal(receipt.changes.items[0].delta,-1);assert.equal(receipt.changes.coins.gp,-1);
   const actual=validateSnapshot(input());actual.hp=19;actual.tempHp=0;actual.coins={pp:0,gp:2,ep:0,sp:10,cp:0};actual.loadout.items[0].qty=2;
   assert.equal(matchesEnding(run,actual),true);actual.loadout.items[2].qty=1;assert.equal(matchesEnding(run,actual),false);
-  const view=suppliesView(run);assert.match(view.embeds[0].description,/19/);assert.ok(view.files[0].attachment.length>0);
+  const view=suppliesView(run);assert.match(JSON.stringify(view.embeds[0]),/20 → \*\*19/);assert.ok(view.files[0].attachment.length>0);
 });
 test('pending receipts block refreshed departures, survive store restart and require exact owner ending export',async()=>fixture(async({db,pool,store})=>{
   let run=await store.open(input());run=await store.act(run.id,g,p,0,'confirm');run=await store.act(run.id,g,p,1,'study');
@@ -79,7 +79,7 @@ test('players cannot run the hosted synthetic diagnostic',async()=>{
   const pool={query:async()=>{queries++;return {rows:[]};}},client={on:(event,handler)=>handlers.set(event,handler)};
   await installQuests(client,pool,{guild:g,channel:'channel',avrae:'avrae'});const initialized=queries;
   const i={isButton:()=>true,customId:'quest:unused:0:race',guildId:g,channelId:'channel',memberPermissions:{has:()=>false},member:{roles:[]},deferReply:async()=>{},editReply:async text=>{reply=text;}};
-  await handlers.get('interactionCreate')(i);assert.match(reply,/Only staff/);assert.equal(queries,initialized);
+  await handlers.get('interactionCreate')(i);assert.match(reply.embeds[0].description,/Only staff/);assert.equal(queries,initialized);
 });
 test('failed synthetic diagnostics clean up only their own UUID-scoped records',async()=>{
   const calls=[];
@@ -115,7 +115,7 @@ test('tide-box cost: simultaneous clicks spend once, receipt is pending, wrong e
   run=await store.act(run.id,g,p,3,'finish');assert.equal(run.state.scene,'complete');
   const receipt=(await db.query('SELECT status,receipt FROM ledger_quest_test_receipts WHERE run_id=$1',[run.id])).rows[0];
   assert.equal(receipt.status,'pending');assert.equal(receipt.receipt.changes.coins.gp,-1);assert.equal(receipt.receipt.starting.coins.gp,4);assert.equal(receipt.receipt.current.coins.gp,3);
-  const view=questView(run);assert.match(view.embeds[1].description,/-1 gp/);assert.match(view.embeds[1].description,new RegExp(`!depart reconcile ${run.id}`));
+  const view=questView(run);const copy=view.embeds[0].fields.find(f=>f.name==='📦 Copy into Avrae').value;assert.match(copy,/−1 gp/);assert.match(copy,new RegExp(`!depart reconcile ${run.id}`));assert.equal(view.embeds[0].color,0xE0A526);
   await assert.rejects(store.open(input()),/Reconcile/);
   const unchanged=input();unchanged.reconcile=run.id;await assert.rejects(store.reconcile(unchanged),/do not match/);
   const overpaid=input();overpaid.reconcile=run.id;overpaid.coins.gp=2;await assert.rejects(store.reconcile(overpaid),/do not match/);
@@ -147,4 +147,16 @@ test('departure review embed groups items by bag, shows empty bags and stays wit
   const many=validateSnapshot(input());many.loadout.bags=Array.from({length:12},(_,n)=>['Bag '+n,Object.fromEntries(Array.from({length:5},(_,i)=>['Long item name number '+i+'y'.repeat(40),1]))]);
   const m=reviewEmbed({snapshot:validateSnapshot(many),state:{scene:'review'}},Array.from({length:6},(_,i)=>'fact-'+i));
   const size=[m.title,m.description,m.footer.text,...m.fields.flatMap(f=>[f.name,f.value])].join('').length;assert.ok(size<6000,String(size));assert.ok(m.fields.length<=25);
+});
+test('every expedition scene uses the shared Ledger card style',()=>{
+  const snapshot=validateSnapshot(input());
+  const base={id:'12345678-aaaa',revision:2,snapshot,state:{hp:20,tempHp:3,items:snapshot.loadout.items,coins:snapshot.coins,roll:{skill:'investigation',dice:[14],modifier:2,total:16,success:true},text:'investigation: 14 + 2 = 16.\nYou read the marks.'}};
+  for(const scene of ['shore','landing','town','complete','cancelled']) {
+    const e=questView({...base,state:{...base.state,scene}}).embeds[0];
+    assert.match(e.title,/^Drowned Watch — /);assert.match(e.footer.text,/^The Wickhaven Ledger • TEST • Drowned Watch • Run 12345678/);assert.equal(typeof e.color,'number');
+    assert.doesNotMatch(e.description,/investigation: 14/);
+  }
+  const landing=questView({...base,state:{...base.state,scene:'landing'}}).embeds[0];
+  assert.equal(landing.fields[0].value,'Investigation: d20 **14** + 2 = **16** — ✅ Success');
+  const done=questView({...base,state:{...base.state,scene:'complete'}}).embeds[0];assert.equal(done.color,0x3C9C63);assert.ok(done.fields.some(f=>/No changes/.test(f.value)));
 });

@@ -19,7 +19,7 @@ test('change request sends one DM with the reason and review link',async()=>{
   try{
     await db.query('INSERT INTO ledger_test_review_posts (guild_id,player_id,name_key,thread_id,message_id) VALUES ($1,$2,$3,$4,$5)',[g,'player','tannia','thread','message']);
     assert.equal(await notifier.deliver('rejection'),'sent');
-    assert.match(payload.content,/Tannia/);assert.match(payload.content,/correct the selected stat set/);assert.match(payload.content,/channels\/1566203164464513104\/thread/);
+    const e=payload.embeds[0];assert.match(e.title,/Tannia/);assert.match(JSON.stringify(e),/correct the selected stat set/);assert.match(JSON.stringify(e),/channels\/1566203164464513104\/thread/);assert.match(e.footer.text,/^The Wickhaven Ledger/);
     assert.deepEqual(payload.allowedMentions,{parse:[]});assert.equal(payload.enforceNonce,true);
     assert.equal(await notifier.deliver('rejection'),'not-pending');assert.equal(calls,1);
     assert.equal((await notifier.latest('player','Tannia')).status,'sent');

@@ -6,9 +6,9 @@ import { QuestStore, validateSnapshot, verifyExport, transition, parseVerificati
 import { questView, departureFailure } from '../src/quest-discord.js';
 
 test('departure diagnostics explain known errors and hide unexpected private details',()=>{
-  assert.match(departureFailure('Ledger approval and expedition save',new Error('This imported sheet needs Ledger TEST approval first.')),/TEST approval first/);
-  assert.doesNotMatch(departureFailure('signature',new Error('postgres://secret-token@example')),/secret-token/);
-  assert.match(departureFailure('export format',new Error('parse failure')),/export format/);
+  const f=departureFailure('Ledger approval and expedition save',new Error('This imported sheet needs Ledger TEST approval first.'));assert.match(f.embeds[0].description,/TEST approval first/);assert.equal(f.embeds[0].title,'⛔ Departure stopped');
+  assert.doesNotMatch(JSON.stringify(departureFailure('signature',new Error('postgres://secret-token@example'))),/secret-token/);
+  assert.match(JSON.stringify(departureFailure('export format',new Error('parse failure'))),/Export format/);
 });
 
 const guild='111111111111111111',player='222222222222222222',channel='333333333333333333',invocation='444444444444444444',avrae='555555555555555555';
@@ -73,7 +73,7 @@ test('database commits choices, resumes after restart, protects ownership and li
 });
 test('review and play controls fit Discord and bind to run revision',()=>{
   const run={id:'test',revision:0,snapshot:snapshot(),state:{scene:'review',text:'Review'}};
-  const view=questView(run);assert.ok(view.content.length<2000);assert.equal(view.components[0].components[0].data.custom_id,'quest:test:0:confirm');
+  const view=questView(run);assert.ok(!view.content&&view.embeds[0].footer.text.startsWith('The Wickhaven Ledger • TEST'));assert.equal(view.components[0].components[0].data.custom_id,'quest:test:0:confirm');
   run.snapshot.loadout.items=Array.from({length:20},(_,i)=>({name:'Equipment '+i+'x'.repeat(40),qty:1}));
   const e=questView(run).embeds[0];assert.ok(e.description.length<4096&&e.fields.every(f=>f.value.length<=1024));assert.match(e.fields.find(f=>f.name==='🎒 Declared inventory').value,/more in the attached receipt/);
 });

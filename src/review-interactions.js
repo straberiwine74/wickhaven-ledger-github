@@ -1,6 +1,7 @@
 import { ActionRowBuilder,ModalBuilder,TextInputBuilder,TextInputStyle,MessageFlags } from 'discord.js';
 import { UserError } from './admin.js';
 import { notifyChanges } from './character-notifications.js';
+import { card, message, notice, clean } from './ui.js';
 
 export function canReview(interaction){
   if(interaction.memberPermissions?.has(8n))return true;
@@ -18,8 +19,8 @@ export async function reviewInteraction(interaction,ledger,guildId){
       if(c.player_id!==interaction.user.id)throw new UserError('Only the player who submitted this character may resubmit it.');
       await ledger.characters.resubmit(guildId,interaction.user.id,c.name,Number(resubmit[2]));
       let notice='';try{await ledger.reviewPosts.sync(c.player_id,c.name);}catch{notice=' The public update is queued for retry.';}
-      await interaction.editReply({content:`**Resubmitted: ${c.name}**\nStatus: Pending review. Staff approval is available again.${notice}\nSaved links and starting-resource choice were reused. Use submit again if those details changed.`,allowedMentions:{parse:[]}});
-    }catch(error){await interaction.editReply({content:error instanceof UserError?error.message:'Resubmission could not be confirmed. Check the review status before retrying.',allowedMentions:{parse:[]}}).catch(()=>{});}
+      await interaction.editReply(message(card({title:`🔁 Resubmitted: ${clean(c.name)}`,description:`Your character is back in the review queue, and staff have been alerted.${notice}`,tone:'pending',fields:[{name:'Good to know',value:'Your saved links and starting-resource choice were reused. Use `/ledger-character submit` again if those changed.'}]})));
+    }catch(error){await interaction.editReply(notice('Resubmission not confirmed',error instanceof UserError?error.message:'Resubmission couldn\u2019t be confirmed. Check the review status before trying again.')).catch(()=>{});}
     return true;
   }
   const match=interaction.customId?.match(/^(char-review|char-decision):(approved|rejected):([a-f0-9]{32}):(\d+)$/);
@@ -46,11 +47,11 @@ export async function reviewInteraction(interaction,ledger,guildId){
       let notice='';
       try{await ledger.reviewPosts.sync(c.player_id,c.name);}catch{notice=' The decision was saved, but the public post update is queued for retry.';}
       if(decision==='rejected')notice+=' '+await notifyChanges(ledger,interaction.id);
-      await interaction.editReply({content:`TEST review ${result.duplicate?'already recorded':decision==='approved'?'approved':'returned for changes'}.${notice}`,allowedMentions:{parse:[]}});return true;
+      await interaction.editReply(message(card({title:result.duplicate?'Review already recorded':decision==='approved'?`✅ Approved: ${clean(c.name)}`:`✏️ Returned for changes: ${clean(c.name)}`,description:(notice.trim()||'The review post has been updated.'),tone:result.duplicate?'neutral':decision==='approved'?'success':'warning'})));return true;
     }
     throw new UserError('This review control is not valid.');
   }catch(error){
-    const payload={content:error instanceof UserError?error.message:'The review could not be confirmed. Check the submission before retrying.',allowedMentions:{parse:[]}};
+    const payload=notice('Review not confirmed',error instanceof UserError?error.message:'The review couldn\u2019t be confirmed. Check the submission before trying again.');
     if(interaction.deferred||interaction.replied)await interaction.editReply(payload).catch(()=>{});
     else await interaction.reply({...payload,flags:MessageFlags.Ephemeral}).catch(()=>{});
     return true;

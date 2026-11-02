@@ -9,6 +9,7 @@ import { ReviewPosts } from './review-posts.js';
 import { reviewInteraction } from './review-interactions.js';
 import { CharacterNotifications } from './character-notifications.js';
 import { installQuests } from './quest-discord.js';
+import { card, message, notice } from './ui.js';
 
 const { DISCORD_TOKEN, DISCORD_GUILD_ID, TEST_CHANNEL_ID } = process.env;
 const savedTestMode = process.env.AP_TEST_MODE === 'true';
@@ -64,16 +65,16 @@ async function trustedProxy(message) {
   return { trusted: cached.ownerId === expected, detail: `Expected creator ID: ${expected}; actual creator ID: ${cached.ownerId ?? 'not supplied by Discord'}.` };
 }
 function isTest(message) { return message.guildId === DISCORD_GUILD_ID && message.channelId === TEST_CHANNEL_ID; }
-async function report(text) {
+async function report(payload) {
   const channel = await client.channels.fetch(TEST_CHANNEL_ID);
-  if (channel?.isTextBased()) await channel.send({ content: text, allowedMentions: { parse: [] } });
+  if (channel?.isTextBased()) await channel.send(typeof payload === 'string' ? notice(null, payload, 'neutral') : payload);
 }
 client.once(Events.ClientReady, async () => {
   console.log(`Ledger connected. Saved test AP: ${savedTestMode}. Real progression disabled.`);
   try {
     const guild = await client.guilds.fetch(DISCORD_GUILD_ID);
     for (const command of commands) await guild.commands.create(command);
-    await report(savedTestMode ? '**Saved AP test is online.** Matched Tupper messages in this channel earn TEST credit. Use /ledger-ap to check your balance. Real progression is unaffected.' : '**Ledger ownership test is online.** No AP is awarded.');
+    await report(savedTestMode ? notice('📒 The Ledger is online', 'Matched Tupper messages in this channel earn **TEST** AP. Use `/ledger-ap` to check your balance. Real progression is unaffected.', 'info') : notice('📒 The Ledger is online', 'Ownership test mode. No AP is awarded.', 'neutral'));
   }
   catch { console.error('Cannot post startup greeting; check test-channel permissions.'); }
   void publishPending();
@@ -88,10 +89,11 @@ client.on(Events.InteractionCreate, async interaction => {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const characterCommand=['ledger-character','ledger-review','ledger-approve','ledger-reject'].includes(interaction.commandName);
     const inReviews=process.env.CHARACTERS_CHANNEL_ID&&(interaction.channelId===process.env.CHARACTERS_CHANNEL_ID||interaction.channel?.parentId===process.env.CHARACTERS_CHANNEL_ID);
-    if (interaction.guildId !== DISCORD_GUILD_ID || (interaction.channelId !== TEST_CHANNEL_ID&&!(characterCommand&&inReviews))) return await interaction.editReply('Use this command in bot-testing, or use character commands inside the characters review forum.');
-    if (!ledger) return await interaction.editReply('Saved AP testing is disabled.');
-    await interaction.editReply({ content: await handleCommand(interaction,ledger,DISCORD_GUILD_ID), allowedMentions: { parse: [] } });
-  } catch (error) { console.error('Ledger command did not complete.'); if (interaction.deferred) await interaction.editReply({ content: error instanceof UserError ? error.message : 'The command could not be confirmed. Check your balance or audit history before retrying.', allowedMentions: { parse: [] } }).catch(() => {}); }
+    if (interaction.guildId !== DISCORD_GUILD_ID || (interaction.channelId !== TEST_CHANNEL_ID&&!(characterCommand&&inReviews))) return await interaction.editReply(notice('Wrong channel', 'Use this command in bot-testing, or use character commands inside the character review forum.', 'neutral'));
+    if (!ledger) return await interaction.editReply(notice('Ledger offline', 'Saved AP testing is turned off right now.', 'neutral'));
+    const result = await handleCommand(interaction,ledger,DISCORD_GUILD_ID);
+    await interaction.editReply(typeof result === 'string' ? notice(null, result, 'info') : result);
+  } catch (error) { console.error('Ledger command did not complete.'); if (interaction.deferred) await interaction.editReply(notice('Command not confirmed', error instanceof UserError ? error.message : 'The command couldn\u2019t be confirmed. Check your balance or audit history before trying again.')).catch(() => {}); }
 });
 client.on(Events.MessageCreate, async message => {
   if (!isTest(message) || message.author.id === client.user.id) return;
@@ -124,15 +126,13 @@ client.on(Events.MessageCreate, async message => {
         // Wait for original-message registrations even if deletion arrived first.
         await Promise.all([...bracketLookups]);
         const result = tracker.resolve(message.id);
-        const text = result.status === 'matched'
-          ? `**Original/proxy match found** • ${words} words • Player ID: ${result.playerId}\nOriginal: ${result.originalId} • Proxy: ${result.proxyId}\nMatched by content, timing, deletion, and Tupperbox webhook creator. This is correlation evidence, not a direct ownership attestation. No AP awarded.`
-          : `**Proxy held for review** • ${words} words • Reason: ${result.status}\n${result.status === 'untrusted-webhook' ? trustDetail + '\n' : ''}No player credited. No AP awarded.`;
         try {
           if (result.status === 'matched' && ledger) {
             const saved = await ledger.record({ guildId: DISCORD_GUILD_ID, playerId: result.playerId, originalId: result.originalId, proxyId: result.proxyId, words, time: message.createdTimestamp });
-            await report(saved.duplicate ? '**Already recorded** — no duplicate test credit.' : `**TEST writing saved** • ${words} words • Player ID: ${result.playerId}\n+${saved.awarded} test AP • Today: ${saved.dailyAP}/4 • Word remainder: ${saved.remainder}/300\nUse /ledger-ap to check your saved test progress. Real progression is unaffected.`);
-          } else await report(text);
-        } catch { console.error('Ownership report or test-ledger write failed; no success claimed.'); await report('**Test credit not confirmed.** Database or reporting failed; check /ledger-ap before retrying.').catch(() => {}); }
+            await report(saved.duplicate ? notice('Already recorded', 'This message was already counted. No duplicate credit.', 'neutral') : message(card({ title: '✍️ Writing saved', description: `<@${result.playerId}> • **${words}** words`, tone: 'success', fields: [
+              { name: 'AP earned', value: `+${saved.awarded}`, inline: true }, { name: 'Today', value: `${saved.dailyAP} / 4 AP`, inline: true }, { name: 'Toward next AP', value: `${saved.remainder} / 300 words`, inline: true }] })));
+          } else await report(notice('🔎 Message held for review', `${words} words • Reason: **${result.status}**${result.status === 'untrusted-webhook' ? '\n' + trustDetail : ''}\nNo player was credited and no AP was awarded.`, 'warning'));
+        } catch { console.error('Ownership report or test-ledger write failed; no success claimed.'); await report(notice('Credit not confirmed', 'The database or report failed. Check `/ledger-ap` before trying again.')).catch(() => {}); }
       }, 2500);
       timers.add(timer);
       return;

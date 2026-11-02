@@ -76,7 +76,7 @@ test('review payload uses explicit role allowlist and never allows arbitrary men
 test('public review buttons reject nonstaff before any database decision',async()=>{
   let reply;
   const interaction={customId:'char-review:approved:'+'a'.repeat(32)+':1',guildId:g,memberPermissions:{has:()=>false},member:{roles:[]},reply:async data=>{reply=data;}};
-  await reviewInteraction(interaction,{},g);assert.match(reply.content,/Only administrators/);
+  await reviewInteraction(interaction,{},g);assert.match(reply.embeds[0].description,/Only administrators/);
   assert.equal(canReview({memberPermissions:{has:()=>true}}),true);
 });
 test('request changes never approves; owner resubmission re-enables staff approval on the same post',async()=>{

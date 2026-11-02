@@ -3,6 +3,7 @@
 All AP and approvals remain test records. Existing balances, submissions and Tupper registrations are preserved.
 
 ## Latest changes
+- Every Ledger message (expeditions, supplies, departures, AP, Tupper brackets, character submissions and reviews, staff adjustments, DMs and channel reports) now uses the shared card style in `src/ui.js`. Review-post lookup still works for existing posts.
 - Drowned Watch TEST: the departure review is now a formatted embed with a sheet link in the title, HP / passive Perception / coins side by side, skills on one line, one inventory field per carried bag (empty bags shown), known observations as a list, and an amber color when HP is low.
 - Drowned Watch TEST: the departure review shows a Low HP warning when the character is at or below half maximum HP. Departure is still allowed. New departures at 0 HP remain blocked.
 - Drowned Watch TEST: the landing now offers one optional paid choice, "Leave 1 gp in the tide-box (spends 1 gp)", for bag-based departures with at least 1 gp. It records the tide-rota observation, can be bought once per visit, and leaves a pending receipt. After updating Avrae, run !depart reconcile <run id>; new departures stay blocked until the exported coins match. All free paths are unchanged.
@@ -12,6 +13,15 @@ All AP and approvals remain test records. Existing balances, submissions and Tup
 - After editing their character, the submitting player clicks Resubmit Changes, or runs /ledger-character resubmit name:Character. The same post returns to Pending, Moderators are alerted, and Approve is enabled again.
 - Resubmit reuses saved links and options. If those changed, run submit again with the same name to replace them.
 - Only administrators and configured Moderators can approve or request changes. Only the submitting player can resubmit. Staff may explicitly return an approved record for corrections. Its original first-approval date remains historical; it does not count as currently approved until reapproved.
+
+## Card style (use for every new message)
+Build every bot message with `card()` / `message()` / `notice()` from `src/ui.js` so the Ledger looks like one system:
+- **Title:** short and specific, one leading emoji at most (e.g. `🎒 Supplies & Receipt`).
+- **Description:** one or two sentences; bold the key word or number.
+- **Fields:** short labelled facts. Inline for numbers (HP, coins, AP); full width for lists and instructions.
+- **Tone (side stripe):** `info` teal (default), `success` green, `warning` amber (action needed), `danger` red (stopped), `pending` blue (waiting on staff), `neutral` gray. Expedition scenes use `shore`, `landing`, `town`.
+- **Footer:** added automatically as `The Wickhaven Ledger • TEST • …`. Add a run or review reference after it when useful.
+- **Buttons:** green for confirm/finish, red for discard, blue for main story choices, gray for utilities; one emoji each.
 
 ## Deployment
 Upload the project contents to the existing GitHub repository. No environment changes for this update. Dockerfile defaults to the website endpoint; vercel.json overrides the daemon to run src/bot.js. Do not merge those entry points.

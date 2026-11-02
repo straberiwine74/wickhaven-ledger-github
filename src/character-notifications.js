@@ -1,3 +1,4 @@
+import { card, message, clean } from './ui.js';
 export class CharacterNotifications{
   constructor(pool,client,guildId){Object.assign(this,{pool,client,guildId});}
   async deliver(requestId){
@@ -17,7 +18,10 @@ export class CharacterNotifications{
       let status='sent',errorCode=null;
       try{
         const user=await this.client.users.fetch(n.player_id);
-        await user.send({content:`**Changes requested: ${c.name}**\n*Wickhaven Ledger — TEST submission*\n\n${review.note}\n\n**Review post:** ${link}\n\nAfter updating your character, click Resubmit Changes in the review post, or use /ledger-character resubmit with the same name. If your links, stat-set selection or resource choice changed, use submit again to update those details. Your review returns to Pending and Moderators are alerted.`,allowedMentions:{parse:[]},nonce:requestId,enforceNonce:true});
+        await user.send(message(card({title:`✏️ Changes requested: ${clean(c.name)}`,description:'Staff reviewed your character and asked for a few changes before approval.',tone:'warning',fields:[
+          {name:'What to change',value:review.note},
+          {name:'Review post',value:link},
+          {name:'When you\u2019re done',value:'Click **Resubmit Changes** in the review post, or use `/ledger-character resubmit` with the same name. If your links, stat set, or resource choice changed, use `/ledger-character submit` again instead. Your review returns to Pending and Moderators are alerted.'}]}),{nonce:requestId,enforceNonce:true}));
       }catch(error){
         errorCode=String(Number.isInteger(error.code)?error.code:'unknown');
         status=[50007,10013,50001,50013].includes(error.code)?'blocked':n.attempts>=4?'failed':'pending';

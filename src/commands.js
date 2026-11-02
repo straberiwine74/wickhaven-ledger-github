@@ -1,6 +1,7 @@
 import { UserError, staffAllowed } from './admin.js';
 import { serverDay } from './activity.js';
 import { characterCommands, handleCharacterCommand } from './character-commands.js';
+import { card, message, clean } from './ui.js';
 
 const stringOption = (name, description, required = true, max_length = 80) => ({ type: 3, name, description, required, max_length });
 export const commands = [
@@ -30,11 +31,16 @@ export async function handleCommand(interaction, ledger, guildId) {
     const sub = interaction.options.getSubcommand();
     if (sub === 'register') {
       const input = await ledger.register(guildId,playerId,interaction.options.getString('name',true),interaction.options.getString('prefix') ?? '',interaction.options.getString('suffix') ?? '');
-      return `Registered ${input.name} to your account. Prefix: ${JSON.stringify(input.prefix)}; suffix: ${JSON.stringify(input.suffix)}.\nThis helps match future messages. It does not create or approve a character, verify a Tupper display name, or grant a character slot. Your Tupperbox configuration is unchanged.`;
+      return message(card({title:'🏷️ Brackets registered',description:`**${clean(input.name)}** is now linked to your account. The Ledger uses this to match your future Tupper messages.`,tone:'success',fields:[
+        {name:'Prefix',value:'`'+JSON.stringify(input.prefix)+'`',inline:true},{name:'Suffix',value:'`'+JSON.stringify(input.suffix)+'`',inline:true},
+        {name:'Good to know',value:'This doesn\u2019t create or approve a character, check your Tupper\u2019s display name, or grant a character slot. Your Tupperbox settings are unchanged.'}]}));
     }
-    if (sub === 'remove') return await ledger.unregister(guildId,playerId,interaction.options.getString('name',true)) ? 'Your registration was removed. Saved AP is unchanged.' : 'No registration with that name exists on your account.';
+    if (sub === 'remove') return await ledger.unregister(guildId,playerId,interaction.options.getString('name',true))
+      ? message(card({title:'🏷️ Registration removed',description:'Those brackets are no longer linked to your account. Saved AP is unchanged.',tone:'neutral'}))
+      : message(card({title:'Registration not found',description:'No registration with that name exists on your account. Use `/ledger-tupper list` to see your saved names.',tone:'neutral'}));
     const rows = await ledger.registrations(guildId,playerId);
-    return rows.length ? ('**Your registered brackets**\n' + rows.map(r => `${r.name}: ${JSON.stringify(r.prefix)}text${JSON.stringify(r.suffix)}`).join('\n')).slice(0,1900) : 'No brackets registered. Use /ledger-tupper register.';
+    return message(card({title:'🏷️ Your registered brackets',description:rows.length?`${rows.length} registration${rows.length===1?'':'s'} on your account.`:'No brackets registered yet. Use `/ledger-tupper register` to add one.',tone:'info',
+      fields:rows.slice(0,25).map(r=>({name:clean(r.name),value:'`'+`${JSON.stringify(r.prefix)}text${JSON.stringify(r.suffix)}`+'`',inline:true}))}));
   }
   if (interaction.commandName === 'ledger-adjust' || interaction.commandName === 'ledger-audit') {
     const member = await interaction.guild.members.fetch(playerId);
@@ -45,11 +51,16 @@ export async function handleCommand(interaction, ledger, guildId) {
     if (interaction.commandName === 'ledger-adjust') {
       const day = interaction.options.getString('day') ?? serverDay(new Date());
       const result = await ledger.adjust({ guildId, playerId: target.id, moderatorId: playerId, requestId: interaction.id, delta: interaction.options.getInteger('change',true), day, reason: interaction.options.getString('reason',true) });
-      return `**TEST adjustment ${result.duplicate ? 'already recorded' : 'saved'}**\nPlayer ID: ${target.id}\nDay: ${day}\nDaily AP: ${result.before_ap} → ${result.after_ap}\nTotal AP and active days reflect this correction. Unfinished words are unchanged. The reason and moderator ID are recorded.\nThis adjusts AP only; source writing may earn new credit later.`;
+      return message(card({title:`⚖️ AP adjustment ${result.duplicate ? 'already recorded' : 'saved'}`,description:`<@${target.id}>\nTotal AP and active days reflect this correction. The reason and your moderator ID are recorded.`,tone:result.duplicate?'neutral':'success',fields:[
+        {name:'Day',value:day,inline:true},{name:'Daily AP',value:`${result.before_ap} → **${result.after_ap}**`,inline:true},
+        {name:'Note',value:'This adjusts AP only. Unfinished words are unchanged, and the source writing may still earn credit later.'}]}));
     }
     const rows = await ledger.audit(guildId,target.id);
-    return rows.length ? ('**TEST adjustment history**\nPlayer ID: ' + target.id + '\n' + rows.map(r => `${r.day}: ${r.delta > 0 ? '+' : ''}${r.delta} AP (${r.before_ap}→${r.after_ap}); moderator ${r.moderator_id}\n${r.reason}`).join('\n\n')).slice(0,1900) : 'No test AP adjustments recorded for this player.';
+    return message(card({title:'⚖️ AP adjustment history',description:rows.length?`<@${target.id}> • most recent first`:`No AP adjustments recorded for <@${target.id}>.`,tone:'info',
+      fields:rows.slice(0,20).map(r=>({name:`${r.day} • ${r.delta > 0 ? '+' : ''}${r.delta} AP (${r.before_ap} → ${r.after_ap})`,value:`${clean(r.reason)}\nModerator: <@${r.moderator_id}>`}))}));
   }
   const s = await ledger.status(guildId,playerId);
-  return `**TEST ledger — not real progression**\nToday: ${s.today}/4 AP\nTotal: ${s.total} AP\nUnfinished words: ${s.remainder}/300\nActive days: ${s.active_days}\nDaily reset: midnight America/Chicago.`;
+  return message(card({title:'📒 Your AP',description:'*TEST ledger: this isn\u2019t real progression yet.*',tone:'info',fields:[
+    {name:'Today',value:`**${s.today}** / 4 AP`,inline:true},{name:'Total',value:`**${s.total}** AP`,inline:true},{name:'Active days',value:`**${s.active_days}**`,inline:true},
+    {name:'Words toward next AP',value:`${s.remainder} / 300`,inline:true},{name:'Daily reset',value:'Midnight, Chicago time',inline:true}]}));
 }

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import { ActionRowBuilder,ButtonBuilder,ButtonStyle,ChannelType,EmbedBuilder } from 'discord.js';
+import { ActionRowBuilder,ButtonBuilder,ButtonStyle,ChannelType } from 'discord.js';
 import { UserError } from './admin.js';
+import { card } from './ui.js';
 
 export const reviewKey=c=>createHash('md5').update(`${c.guild_id}:${c.player_id}:${c.name_key}`).digest('hex');
 const clean=s=>s.replace(/[\r\n]/g,' ').slice(0,100);
@@ -9,22 +10,21 @@ async function findReviewThread(threads,c,key,botId){
     if(thread.ownerId!==botId||!(thread.name===clean(c.name)||thread.name.endsWith(`[${key}]`)))continue;
     let starter;
     try{starter=await thread.fetchStarterMessage();}catch(error){if(error.code===10008)continue;throw error;}
-    if(starter?.author.id===botId&&starter.embeds[0]?.footer?.text?.startsWith(`Review ${key} •`))return thread;
+    if(starter?.author.id===botId&&(starter.embeds[0]?.footer?.text??'').includes(`Review ${key} •`))return thread;
   }
 }
 export function reviewPayload(c,roleId,note=''){
   const key=reviewKey(c);
   const status={pending:'Pending review',approved:'Approved',rejected:'Changes requested'}[c.status];
-  const embed=new EmbedBuilder().setTitle(`Character review: ${c.name}`).setColor(c.status==='approved'?0x3c9c63:c.status==='rejected'?0xcf9240:0x527cba)
-    .setDescription(`**Status: ${status}**\nPlayer: <@${c.player_id}>\n**TEST SYSTEM — not live approval**`)
-    .addFields(
-      {name:'Character sheet',value:c.sheet_url},
-      {name:`Ability scores — chosen set ${c.stat_set}`,value:c.stats_url},
-      {name:'Starting resources',value:`${c.resources==='gold'?'Gold':'Equipment'} from BOTH class and background`},
-      {name:'Creation rules to verify',value:'Level 3 • 2024 rules • official WotC only • legacy only where no 2024 option exists. Verify sheet ownership, chosen stat-set reaction and resources manually.'})
-    .setFooter({text:`Review ${key} • Revision ${c.revision}`});
-  if(note)embed.addFields({name:c.status==='rejected'?'Changes requested by staff':'Staff review note',value:note});
-  if(c.status==='rejected')embed.addFields({name:'Player next step',value:'Update your character, then click Resubmit Changes. This returns the review to Pending and alerts Moderators. If saved links or options changed, use submit again to update them.'});
+  const fields=[
+    {name:'Character sheet',value:c.sheet_url},
+    {name:`Ability scores — chosen set ${c.stat_set}`,value:c.stats_url},
+    {name:'Starting resources',value:`${c.resources==='gold'?'Gold':'Equipment'} from both class and background`},
+    {name:'✅ Check before approving',value:'Level 3 • 2024 rules • official WotC only • legacy only where no 2024 option exists. Check sheet ownership, the chosen stat-set reaction, and starting resources by hand.'}];
+  if(note)fields.push({name:c.status==='rejected'?'✏️ Changes requested by staff':'Staff review note',value:note});
+  if(c.status==='rejected')fields.push({name:'Player next step',value:'Update your character, then click **Resubmit Changes**. The review returns to Pending and Moderators are alerted. If your links or options changed, use `/ledger-character submit` again.'});
+  // Keep "Review <key> • Revision <n>" at the end of the footer: post lookup depends on it.
+  const embed=card({title:`🧙 Character review: ${c.name}`,description:`**Status: ${status}**\nPlayer: <@${c.player_id}>\n*TEST system: not a live approval.*`,tone:{pending:'pending',approved:'success',rejected:'warning'}[c.status],fields,footer:`Review ${key} • Revision ${c.revision}`});
   const row=new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`char-review:approved:${key}:${c.revision}`).setLabel('Approve').setStyle(ButtonStyle.Success).setDisabled(c.status!=='pending'),
     new ButtonBuilder().setCustomId(`char-review:rejected:${key}:${c.revision}`).setLabel('Request Changes').setStyle(ButtonStyle.Secondary).setDisabled(c.status==='rejected'),
@@ -92,7 +92,7 @@ export class ReviewPosts{
       if(!created&&c.status==='pending'&&previouslyAnnounced<c.revision){
         const marker=`Review ${key} revision ${c.revision} ready`;
         const messages=await thread.messages.fetch({limit:100});
-        const notified=messages.some(m=>m.author.id===this.client.user.id&&(m.content.includes(marker)||(m.id===starter.id&&m.embeds[0]?.footer?.text===`Review ${key} • Revision ${c.revision}`&&previouslyAnnounced===0)));
+        const notified=messages.some(m=>m.author.id===this.client.user.id&&(m.content.includes(marker)||(m.id===starter.id&&m.embeds[0]?.footer?.text?.endsWith(`Review ${key} • Revision ${c.revision}`)&&previouslyAnnounced===0)));
         if(!notified)await thread.send({content:`<@&${this.roleId}> — ${marker}.`,allowedMentions:{parse:[],roles:[this.roleId],users:[]}});
       }
       await db.query(`INSERT INTO ledger_test_review_posts (guild_id,player_id,name_key,thread_id,message_id,last_ping_revision,presentation_version)
