@@ -4,7 +4,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { TestLedger } from '../src/store.js';
 import { QuestStore, validateSnapshot, transition, tideBoxOffered } from '../src/quest.js';
 import { BAG_COLLECTION, importBags, resources, resourceReceipt, spendResources, matchesEnding } from '../src/quest-resources.js';
-import { suppliesView, installQuests, questView } from '../src/quest-discord.js';
+import { suppliesView, installQuests, questView, lowHp } from '../src/quest-discord.js';
 import { runClickDiagnostic } from '../src/quest-race.js';
 
 const g='111111111111111111',p='222222222222222222';
@@ -123,4 +123,13 @@ test('tide-box cost: simultaneous clicks spend once, receipt is pending, wrong e
   const changed=input();changed.reconcile=run.id;changed.coins={pp:0,gp:2,ep:0,sp:10,cp:0};await store.reconcile(changed);
   assert.equal((await db.query('SELECT status FROM ledger_quest_test_receipts WHERE run_id=$1',[run.id])).rows[0].status,'verified');
   const next=input();next.coins.gp=3;const fresh=await store.open(next);assert.notEqual(fresh.id,run.id);assert.equal(fresh.snapshot.coins.gp,3);
+}));
+test('departure review warns at or below half HP and new departures are blocked at 0 HP',async()=>fixture(async({store})=>{
+  const at=(hp,maxHp=20)=>({...input(),hp,maxHp});
+  assert.equal(lowHp(at(11)),false);assert.equal(lowHp(at(10)),true);assert.equal(lowHp(at(1,23)),true);assert.equal(lowHp(at(0)),false);
+  const low=await store.open(at(1,23));assert.match(questView(low).embeds[0].description,/Low HP warning:\*\* 1\/23 HP \(\+3 temporary\)/);
+  await store.act(low.id,g,p,0,'cancel');
+  const healthy=await store.open(at(20));assert.doesNotMatch(questView(healthy).embeds[0].description,/Low HP/);
+  await store.act(healthy.id,g,p,0,'cancel');
+  await assert.rejects(store.open(at(0)),/Recover HP before starting a new expedition/);
 }));

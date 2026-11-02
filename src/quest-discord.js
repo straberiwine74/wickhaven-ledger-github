@@ -26,10 +26,14 @@ export function departureFailure(stage,error) {
   return `Departure stopped at **${stage}**. ${detail}\nNo reset or additional reward was applied. Existing saved progress is preserved.`;
 }
 
+// Warn at or below half maximum HP (bloodied). 0 HP is blocked in QuestStore.open.
+export const lowHp=s=>s.hp>0&&s.hp*2<=s.maxHp;
+
 export function questView(run, knowledge=[]) {
   const s=run.snapshot, state=run.state;
   let content=`**Drowned Watch — TEST • ${s.name.replace(/[\*_~<>@]/g,'')}**\n${state.text}`;
   if(state.scene==='review') {
+    if(lowHp(s)) content+=`\n**⚠️ Low HP warning:** ${s.hp}/${s.maxHp} HP${s.tempHp?` (+${s.tempHp} temporary)`:''}. You can still depart, but consider resting in Avrae first, then run !depart drowned-watch again.`;
     content+=`\nSheet: https://www.dndbeyond.com/characters/${s.character.slice(7)}\nHP ${s.hp}/${s.maxHp} (+${s.tempHp} temporary) • Passive Perception ${s.passive} (declared; verify against sheet)\n`;
     content+=Object.entries(s.skills).map(([k,v])=>`${k} ${v.mod>=0?'+':''}${v.mod}${v.adv===true?' advantage':v.adv===false?' disadvantage':''}`).join(' • ');
     content+='\n'+(s.v===2?'Carried bags inventory: ':'Declared inventory: ')+(s.loadout.items.slice(0,12).map(i=>`${i.qty} × ${i.name}${i.bag?' ['+i.bag+']':''}`).join('; ')||'none');
