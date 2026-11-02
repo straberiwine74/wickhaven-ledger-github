@@ -18,6 +18,30 @@ export default {
     "first": " First Second Beacon expedition recorded (journal only; no AP or gold).",
     "repeat": " Repeat visit recorded. No additional reward."
   },
+  "journal": {
+      "second-beacon-wave-pattern": "Waves at the split headland come in groups; the low approach clears between them.",
+      "second-beacon-climbing-fall": "You fell on the high ascent at the split headland.",
+      "second-beacon-loose-ladder": "The shelf ladder’s upper brackets are pulling out of the stone.",
+      "second-beacon-approach-blocked": "The ladder approach was unsafe; you turned back.",
+      "second-beacon-jammed-weight": "The service door is unlocked, held shut by a jammed counterweight.",
+      "second-beacon-hatch-brace": "An iron brace inside the inspection hatch offers a safe hold.",
+      "second-beacon-hatch-fall": "You fell at the inspection hatch.",
+      "second-beacon-deliberate-removal": "A part was deliberately unbolted from the beacon’s cradle and removed.",
+      "second-beacon-missing-prism": "The missing part is a returning prism that directed the flame into the lens.",
+      "second-beacon-alignment-link": "The returning prism linked this beacon to the others.",
+      "second-beacon-empty-cradle": "The beacon’s light path breaks at an empty fitting.",
+      "second-beacon-mara-note": "Mara Venn’s note: the prism was gone before she arrived; a replacement must match the first beacon’s alignment.",
+      "second-beacon-ignition-warning": "Forcing ignition vents fire through the service chamber.",
+      "second-beacon-further-survey-needed": "The empty cradle needs further inspection.",
+      "second-beacon-network-confirmed": "For a heartbeat the beam pointed at the Last Light: the beacons were once a coastal network.",
+      "beacon-restoration-goal": "Relighting the Second Beacon needs its prism replaced and aligned with the Last Light.",
+      "second-beacon-test-flare": "A test flash showed the light path can’t work until the prism is replaced.",
+      "second-beacon-burner-working": "The Second Beacon’s fuel and burner still work.",
+      "second-beacon-heat-burst": "Testing the burner caused a dangerous heat burst. Further attempts are unsafe.",
+      "second-beacon-two-part-specification": "The cradle marks record both the prism’s size and its alignment toward the Last Light.",
+      "second-beacon-repair-specifications": "You recorded a full specification for a replacement prism.",
+      "second-beacon-specialist-needed": "A specialist must survey the prism fitting’s alignment."
+  },
   "scenes": {
     "split-headland": {
       "title": "🌊 The Split Headland",

@@ -2,10 +2,12 @@ import { UserError, staffAllowed } from './admin.js';
 import { serverDay } from './activity.js';
 import { characterCommands, handleCharacterCommand } from './character-commands.js';
 import { card, message, clean, testNote } from './ui.js';
+import { journalCommand, handleJournal } from './journal.js';
 
 const stringOption = (name, description, required = true, max_length = 80) => ({ type: 3, name, description, required, max_length });
 export const commands = [
   ...characterCommands,
+  journalCommand,
   { name: 'ledger-ap', description: 'View your AP balance and progress' },
   { name: 'ledger-tupper', description: 'Register your own Tupper brackets with the Ledger', options: [
     { type: 1, name: 'register', description: 'Add or update your own bracket registration', options: [
@@ -26,6 +28,7 @@ export const commands = [
 
 export async function handleCommand(interaction, ledger, guildId) {
   if(characterCommands.some(c=>c.name===interaction.commandName))return handleCharacterCommand(interaction,ledger,guildId);
+  if(interaction.commandName==='ledger-journal')return handleJournal(interaction,ledger,guildId);
   const playerId = interaction.user.id;
   if (interaction.commandName === 'ledger-tupper') {
     const sub = interaction.options.getSubcommand();

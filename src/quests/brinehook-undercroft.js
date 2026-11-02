@@ -12,6 +12,22 @@ export default {
     "first": " First undercroft search recorded (journal only; no AP or gold).",
     "repeat": " Repeat visit recorded. No additional reward."
   },
+  "journal": {
+      "brinehook-dry-passage": "A raised passage along the wall leads dry into the records vault.",
+      "brinehook-linked-index": "Emergency dockets and coastal charts share the same station numbers.",
+      "brinehook-northern-route": "Three unclosed shipping entries carry the northern route code.",
+      "brinehook-missing-ships": "The Grey Petrel, Mercy Bell, and Northward Star sailed past the northern beacons and never returned.",
+      "brinehook-grey-petrel-missing": "The Grey Petrel sailed north and was never recorded as returning.",
+      "brinehook-unresolved-voyage": "At least one northern voyage was never closed in the registers.",
+      "brinehook-station-two-amendment": "A docket amendment reads “Station Two — service key issued.”",
+      "brinehook-relighter-identified": "The harbor records name who relit the Last Light.",
+      "brinehook-mara-venn": "Deputy Harbor Keeper Mara Venn relit the Last Light.",
+      "brinehook-mara-station-two": "Mara Venn was next sent to Station Two, carrying its service key.",
+      "brinehook-survey-reference": "The coastal chart’s missing section matches a loose survey page.",
+      "second-beacon-route": "You found the route to the Second Beacon: a tidal path and a higher maintenance ascent past the split headland.",
+      "second-beacon-ignition-warning": "A warning about the Second Beacon reads: “Do not attempt repeated ignition.”",
+      "brinehook-station-two-named": "The chart marks the Second Beacon, but not a clear way to reach it."
+  },
   "scenes": {
     "market-stairs": {
       "title": "🗝️ The Customs Stair",

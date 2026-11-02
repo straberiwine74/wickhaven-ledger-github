@@ -12,6 +12,28 @@ export default {
     "first": " First Briarfall Road expedition recorded (journal only; no AP or gold).",
     "repeat": " Repeat visit recorded. No additional reward."
   },
+  "journal": {
+      "briarfall-tide-warning": "The tide can cover the whole north road approach.",
+      "briarfall-tide-cutoff": "The flooded road closed behind you on the way in.",
+      "briarfall-high-route": "A usable route runs along the embankment, above the flood.",
+      "briarfall-embankment-fall": "The embankment crumbles in places; you slid into the shallows.",
+      "briarfall-return-expected": "The waystation travelers packed for a short absence and expected to return.",
+      "briarfall-harrowmere-tag": "A luggage tag reads “Harrowmere.” A note asks, “Keep our beds until we return.”",
+      "briarfall-packed-belongings": "The packs were left behind on purpose, but their papers were unreadable.",
+      "briarfall-travelers-went-north": "The travelers left together through the north door, taking walking sticks and leaving their packs.",
+      "briarfall-tracks-obscured": "Flood mud has erased the travelers’ tracks.",
+      "briarfall-weak-beam": "The surviving bridge beam is split; the upstream supports are firmer.",
+      "briarfall-harrowmere-discovered": "A road sign beyond the bridge reads “HARROWMERE — 6 MILES.”",
+      "briarfall-bridge-injury": "You were hurt falling at the washed-out bridge.",
+      "briarfall-lantern-emblem": "The Harrowmere sign carries a carved lantern.",
+      "briarfall-unmapped-settlement": "Harrowmere does not appear on any current Wickhaven road map.",
+      "briarfall-sign-recorded": "You copied the sign: Harrowmere’s name, its distance, and the lantern emblem.",
+      "briarfall-sign-recovered": "You brought the Harrowmere sign plank back to Wickhaven.",
+      "briarfall-sign-fragment": "You kept a fragment of the sign bearing the name “Harrowmere.”",
+      "briarfall-established-road": "Old wheel ruts show the road to Harrowmere was regularly traveled.",
+      "briarfall-safe-ebb": "Waiting out the high water at the waystation leaves a safe road home.",
+      "briarfall-delayed-return": "Deep water forced you to wait at the waystation before returning."
+  },
   "scenes": {
     "north-road": {
       "title": "🌾 The North Road",

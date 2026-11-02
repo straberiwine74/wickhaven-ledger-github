@@ -12,6 +12,15 @@ export function checkLabel(check) {
   if(check.save) return `${ABILITIES[check.save]} save`;
   if(check.ability) return `${ABILITIES[check.ability]} check`;
 }
+// Every discovery a quest can grant (passives and outcomes).
+export function questFacts(quest) {
+  const out=new Set();
+  for(const scene of Object.values(quest.scenes)) {
+    for(const f of scene.passive?.success?.facts??[]) out.add(f);
+    for(const c of scene.choices) for(const o of [c.outcome,c.success,c.failure]) for(const f of o?.facts??[]) out.add(f);
+  }
+  return out;
+}
 export function checksUsed(quest) {
   const out=new Map();
   for(const scene of Object.values(quest.scenes)) {
@@ -41,6 +50,8 @@ export function validateQuest(q) {
   ok(q.completion.ap===undefined||q.completion.ap===1,'completion.ap can only be 1');
   // Quest unlock: requires:{facts:[...], scope:'server'|'character', hint}
   if(q.requires) ok(Array.isArray(q.requires.facts)&&q.requires.facts.length&&q.requires.facts.every(f=>id.test(f))&&['server','character'].includes(q.requires.scope??'character')&&(q.requires.hint===undefined||(typeof q.requires.hint==='string'&&q.requires.hint.length<=300)),'requires needs facts, scope server or character, and an optional hint');
+  // journal: readable sentence for each discovery, shown by /ledger-journal.
+  if(q.journal) ok(typeof q.journal==='object'&&Object.entries(q.journal).every(([f,t])=>id.test(f)&&typeof t==='string'&&t.length>0&&t.length<=300),'journal entries need a lowercase discovery id and up to 300 characters of text');
   for(const reserved of ['review','town',...TERMINAL]) ok(!Object.hasOwn(q.scenes,reserved),`scene id "${reserved}" is reserved`);
   const checkOk=c=>ok(c&&Number.isInteger(c.dc)&&c.dc>=1&&c.dc<=40&&[c.skill,c.save,c.ability].filter(Boolean).length===1&&(c.skill?Object.hasOwn(SKILLS,c.skill):Object.hasOwn(ABILITIES,c.save??c.ability)),'check needs exactly one valid skill, save or ability and a dc');
   const outcomeOk=o=>{

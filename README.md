@@ -3,6 +3,7 @@
 All AP and approvals remain test records. Existing balances, submissions and Tupper registrations are preserved.
 
 ## Latest changes
+- `/ledger-journal [character] [quest] [player]`: a private journal card. Without `quest` it summarizes every quest (visits, first completion, AP, discovery count); with `quest` it lists every discovery as a readable sentence plus the last visit's ending and rolls. Players can only read their own characters; staff can add `player`. Locked quests are not listed until unlocked. Each quest file has a `journal` map of discovery → sentence; the tests fail if a quest grants a discovery without one.
 - Added Briarfall Road, Saint Orra’s Orchard, The Brinehook Undercroft and The Second Beacon (all `test`). Quests can now be locked with `requires:{facts:[...], scope:'server'|'character', hint}`; The Second Beacon opens for everyone once any character finds `second-beacon-route`. A character with an unfinished expedition is told to finish it before starting a different quest. The test suite now walks every path of every registered quest.
 - Live AP (`LEDGER_LIVE=true`): Tupper posts in every in-character channel and forum thread earn AP for players with an approved character. OOC, setup, rules and staff spaces are excluded (list in `src/live.js`, override with `AP_EXCLUDED_IDS`). Bracket registration now requires an approved character. Awards and held messages are logged to `AP_LOG_CHANNEL_ID`, never in the scene. Existing TEST AP and approvals carry over unchanged.
 - Gameplay AP: quests marked `status:'live'` award 1 AP for each first-time milestone with `ap: 1` (including `completion.ap`). `!mine`, or `!hunt end`, confirmed by Avrae's reply in `MINING_CHANNEL_ID` / `HUNTING_CHANNEL_ID`, awards 1 AP per player per day. Everything shares the 4 AP/day cap. A quest milestone reached at the cap is held and paid on the player's next day with room (before new AP that day; an hourly sweep also pays it). Gathering AP at the cap is not held: it's a once-per-day allowance. `/ledger-ap` shows held AP.
@@ -33,6 +34,7 @@ Scene choices (max 5 per scene) are one of:
 - **Plain:** `outcome:{...}` with no roll.
 
 Outcomes can set `ap: 1` together with a `milestone` (and `completion.ap: 1`) to award AP once per character when the quest's status is `live`. Outcomes can also set `text`, `goto` (a scene id, `@complete` or `@retreat`), `facts` (saved to the character forever), `flags` (this visit only), `milestone`, and `damage` (number or dice like `1d6+1`; reaching 0 HP ends the visit as **Carried Home**).
+Add a `journal` entry for every discovery (`"fact-id": "Readable sentence."`); `npm test` lists any that are missing.
 Choice options: `requires:{facts:[...], notFacts:[...], flags:{...}, minLevel:3, bags:true}`, `cost:{coins:{gp:1}, items:[...], hp:2}`, `once:true`, `style`, `emoji`. A scene can add `passive:{skill, dc, success:{text, facts}}`.
 
 ## Avrae departure alias
