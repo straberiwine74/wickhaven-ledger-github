@@ -1,3 +1,4 @@
+import { questsCommand, questCatalogue } from './quest-catalogue.js';
 import { UserError, staffAllowed } from './admin.js';
 import { serverDay } from './activity.js';
 import { characterCommands, handleCharacterCommand } from './character-commands.js';
@@ -8,6 +9,7 @@ const stringOption = (name, description, required = true, max_length = 80) => ({
 export const commands = [
   ...characterCommands,
   journalCommand,
+  questsCommand,
   { name: 'ledger-ap', description: 'View your AP balance and progress' },
   { name: 'ledger-tupper', description: 'Register your own Tupper brackets with the Ledger', options: [
     { type: 1, name: 'register', description: 'Add or update your own bracket registration', options: [
@@ -29,6 +31,7 @@ export const commands = [
 export async function handleCommand(interaction, ledger, guildId) {
   if(characterCommands.some(c=>c.name===interaction.commandName))return handleCharacterCommand(interaction,ledger,guildId);
   if(interaction.commandName==='ledger-journal')return handleJournal(interaction,ledger,guildId);
+  if(interaction.commandName==='ledger-quests')return questCatalogue(interaction);
   const playerId = interaction.user.id;
   if (interaction.commandName === 'ledger-tupper') {
     const sub = interaction.options.getSubcommand();
@@ -69,3 +72,4 @@ export async function handleCommand(interaction, ledger, guildId) {
     {name:'Words toward next AP',value:`${s.remainder} / 300`,inline:true},{name:'Daily reset',value:'Midnight, Chicago time',inline:true},
     ...(s.held?[{name:'⏳ Held for tomorrow',value:`**${s.held}** quest AP earned at the daily cap. It\u2019s added on your next day with room.`}]:[])]}));
 }
+
