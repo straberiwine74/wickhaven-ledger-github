@@ -146,8 +146,6 @@ client.on(Events.MessageDelete, async message => {
   if (!isTest(message) || !recent.has(message.id)) return;
   recent.delete(message.id);
   tracker.deleted(message.id);
-  try { await report(`**Observed deletion** • Message ID: ${message.id}\nThis can occur when Tupperbox replaces an original. This alone does not establish proxy ownership.`); }
-  catch { console.error('Deletion report could not be sent.'); }
 });
 const cleanup = setInterval(() => { tracker.expire(Date.now()); for (const [id, item] of recent) if (item.expires < Date.now()) recent.delete(id); }, 30000);
 client.on(Events.Error, () => console.error('Discord connection error.'));
