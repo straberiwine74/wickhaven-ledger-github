@@ -36,7 +36,7 @@ test('approaches use exported modifiers and advantage, show passives, and fail f
   const facts=[];
   for(const action of ['climb','sneak','study']) {
     const success=transition(run,action,()=>20),fail=transition(run,action,()=>1);
-    assert.equal(success.roll.total,23); assert.equal(fail.scene,'landing'); assert.equal(fail.roll.success,false);facts.push(success.facts.at(-1));
+    assert.equal(success.roll.total,23); assert.equal(fail.scene,'landing'); assert.equal(fail.roll.success,false);facts.push(success.facts.find(f=>['culvert-submerges','moon-marked-door','culvert-low-tide'].includes(f)));
   }
   assert.equal(new Set(facts).size,3);
   run.snapshot.skills.athletics.adv=true;let dice=[2,17];assert.equal(transition(run,'climb',()=>dice.shift()).roll.total,20);

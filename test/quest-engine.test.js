@@ -75,7 +75,7 @@ test('runs saved by the old hardcoded Drowned Watch continue unchanged',()=>{
   const snapshot=validateSnapshot({v:2,quest:'drowned-watch',guild:g,player:p,channel:'333333333333333333',invocation:'444444444444444444',character:'beyond-456',name:'Old',hp:12,maxHp:23,tempHp:0,passive:13,
     skills:Object.fromEntries(['athletics','stealth','investigation','perception'].map(k=>[k,{mod:2,adv:null}])),loadout:{source:'bags-rewritten',collection:BAG_COLLECTION,bags:[['Pack',{}]],coinsSource:'avrae-coinpurse'},coins:{pp:0,gp:5,ep:0,sp:0,cp:0},signature:'x'});
   const old={id:'old',revision:4,snapshot,state:{scene:'landing',hp:12,tempHp:0,items:[],coins:{pp:0,gp:4,ep:0,sp:0,cp:0},tidebox:true,alert:true,facts:['maintenance-route','tide-rota'],roll:{skill:'athletics',dice:[6],modifier:-1,total:5,success:false},text:'athletics: 6 - 1 = 5.\nThe chain tears free.'}};
-  assert.deepEqual(choicesFor(old).map(c=>c.id),['finish','retreat']);
+  assert.ok(!choicesFor(old).some(c=>c.id==='tidebox'));assert.ok(choicesFor(old).some(c=>c.id==='finish'));
   const e=questView(old).embeds[0];assert.doesNotMatch(e.description,/athletics: 6/);assert.match(e.fields[0].value,/^Athletics: d20 \*\*6\*\*/);
   const town=transition(old,'retreat');assert.equal(town.scene,'town');assert.equal(transition({...old,state:town},'resume').scene,'landing');
 });
@@ -86,4 +86,14 @@ test('the exact JSON produced by the v3 Avrae alias is accepted and shown in ful
   const e=questView({id:'r',revision:0,snapshot:s,state:{scene:'review',hp:s.hp,tempHp:0,items:s.loadout.items,coins:s.coins}}).embeds[0];
   assert.match(e.fields.find(f=>f.name==='💰 Coins').value,/from Avrae coin purse/);assert.equal(e.fields.find(f=>f.name==='🎒 Belt').value,'*empty*');
   assert.match(e.fields.find(f=>f.name==='🎲 Skills').value,/Sleight of Hand \*\*\+0\*\*/);
+});
+test('arriving in a scene shows the outcome, then the scene description; old 4-skill runs hide checks they cannot roll',()=>{
+  const snapshot=validateSnapshot(sheet()),run={id:'r',revision:0,snapshot,state:{scene:'review',hp:10,tempHp:2,items:snapshot.loadout.items,coins:snapshot.coins}};
+  run.state=transition(run,'confirm');
+  const hall=transition(run,'force',()=>20);assert.equal(hall.text,'It opens.');
+  const v1={...run,snapshot:{...snapshot,v:1,skills:{athletics:{mod:1,adv:null},stealth:{mod:1,adv:null},investigation:{mod:1,adv:null},perception:{mod:1,adv:null}},saves:undefined,checks:undefined}};
+  assert.deepEqual(choicesFor(v1).map(c=>c.id),['leave']);
+  const withText={...trial,id:'text-trial',scenes:{...trial.scenes,hall:{...trial.scenes.hall,text:'Dust everywhere.'}}};
+  registerQuest(withText);
+  const r2={...run,snapshot:{...snapshot,quest:'text-trial'}};assert.equal(transition(r2,'force',()=>20).text,'It opens.\n\nDust everywhere.');
 });

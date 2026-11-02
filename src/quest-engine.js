@@ -20,12 +20,15 @@ export function checkValue(snapshot,check) {
 export function passiveValue(snapshot,skill) {
   // Perception uses the value shown on the departure review (declared or computed).
   if(skill==='perception') return snapshot.passive;
-  const e=snapshot.skills?.[skill];if(!e) fail(`This character export has no ${SKILLS[skill]}.`);
+  const e=snapshot.skills?.[skill];if(!e) return null; // older 4-skill exports
   return 10+e.mod+(e.adv===true?5:e.adv===false?-5:0);
 }
 const knownFacts=(run,knowledge)=>new Set([...knowledge,...(run.state.facts??[])]);
 export function available(run,choice,knowledge=[]) {
   const st=run.state,r=choice.requires??{},known=knownFacts(run,knowledge);
+  // Runs started before the full-sheet export only carry four skills; hide
+  // checks they can't roll instead of failing when clicked.
+  if(choice.check) try {checkValue(run.snapshot,choice.check);} catch {return false;}
   if(choice.once&&((st.used??[]).includes(choice.id)||(choice.legacyFlag&&st[choice.legacyFlag]))) return false;
   if(r.bags&&!(run.snapshot.v>=2)) return false;
   if(r.facts&&!r.facts.every(f=>known.has(f))) return false;
@@ -58,10 +61,10 @@ function damageAmount(spec,d) {
 }
 function enter(quest,state,sceneId,snapshot,outcomeText) {
   const scene=quest.scenes[sceneId];state.scene=sceneId;
-  state.text=outcomeText??scene.text??'';
-  const p=scene.passive,applied=state.passives??[];
-  if(p&&!applied.includes(sceneId)) {
-    const value=passiveValue(snapshot,p.skill);
+  // Arriving by a choice shows what happened, then the new scene's description.
+  state.text=[outcomeText,scene.text].filter(Boolean).join('\n\n');
+  const p=scene.passive,applied=state.passives??[],value=p?passiveValue(snapshot,p.skill):null;
+  if(p&&value!==null&&!applied.includes(sceneId)) {
     state.passives=[...applied,sceneId];
     state.text+='\n'+(p.note??`Passive ${SKILLS[p.skill]} {value} applied.`).replace('{value}',value);
     if(value>=p.dc) {state.text+=' '+p.success.text;state.facts=[...new Set([...(state.facts??[]),...(p.success.facts??[])])];}
