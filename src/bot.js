@@ -52,6 +52,8 @@ async function publishPending(){
   try{await ledger.reviewPosts.retryPending();await ledger.notifications?.retryPending();}catch{console.error('Character-review publishing could not complete.');}finally{publishing=false;}
 }
 const publicationTimer=setInterval(()=>{void publishPending();},60000);
+// Pay quest AP held at the daily cap once a new Chicago day has room.
+const settleTimer=setInterval(()=>{if(ledger&&live.live)ledger.settle(DISCORD_GUILD_ID).catch(()=>console.error('Held AP could not be settled; it stays held.'));},3600000);
 const recent = new Map();
 const tracker = new ProxyTracker();
 const bracketLookups = new Set();
@@ -183,5 +185,5 @@ client.on(Events.MessageDelete, async message => {
 });
 const cleanup = setInterval(() => { tracker.expire(Date.now()); for (const [id, item] of recent) if (item.expires < Date.now()) recent.delete(id); }, 30000);
 client.on(Events.Error, () => console.error('Discord connection error.'));
-for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { clearInterval(cleanup); clearInterval(publicationTimer); for (const timer of timers) clearTimeout(timer); client.destroy(); process.exit(0); });
+for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { clearInterval(cleanup); clearInterval(publicationTimer); clearInterval(settleTimer); for (const timer of timers) clearTimeout(timer); client.destroy(); process.exit(0); });
 client.login(DISCORD_TOKEN).catch(() => { console.error('Discord login failed. Check the token and enabled intents.'); process.exit(1); });

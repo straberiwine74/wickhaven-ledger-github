@@ -59,8 +59,10 @@ export async function handleCommand(interaction, ledger, guildId) {
     return message(card({title:'⚖️ AP adjustment history',description:rows.length?`<@${target.id}> • most recent first`:`No AP adjustments recorded for <@${target.id}>.`,tone:'info',
       fields:rows.slice(0,20).map(r=>({name:`${r.day} • ${r.delta > 0 ? '+' : ''}${r.delta} AP (${r.before_ap} → ${r.after_ap})`,value:`${clean(r.reason)}\nModerator: <@${r.moderator_id}>`}))}));
   }
+  if (ledger.settle) await ledger.settle(guildId,playerId);
   const s = await ledger.status(guildId,playerId);
   return message(card({title:'📒 Your AP',description:testNote('*TEST ledger: this isn\u2019t real progression yet.*')||'Your progress toward new character slots.',tone:'info',fields:[
     {name:'Today',value:`**${s.today}** / 4 AP`,inline:true},{name:'Total',value:`**${s.total}** AP`,inline:true},{name:'Active days',value:`**${s.active_days}**`,inline:true},
-    {name:'Words toward next AP',value:`${s.remainder} / 300`,inline:true},{name:'Daily reset',value:'Midnight, Chicago time',inline:true}]}));
+    {name:'Words toward next AP',value:`${s.remainder} / 300`,inline:true},{name:'Daily reset',value:'Midnight, Chicago time',inline:true},
+    ...(s.held?[{name:'⏳ Held for tomorrow',value:`**${s.held}** quest AP earned at the daily cap. It\u2019s added on your next day with room.`}]:[])]}));
 }

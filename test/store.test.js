@@ -22,11 +22,11 @@ test('database saves, deduplicates, carries words across days and enforces cap',
     await write(1200);
     assert.equal((await write(900)).awarded, 0);
     let status = await ledger.status('g', 'p', Date.parse('2026-10-31T19:00:00Z'));
-    assert.deepEqual(status, { remainder: 0, total: 4, active_days: 1, today: 4 });
+    assert.deepEqual(status, { remainder: 0, total: 4, active_days: 1, today: 4, held: 0 });
     await write(250, '2026-11-01T18:00:00Z');
     await write(50, '2026-11-02T18:00:00Z');
     status = await new TestLedger(pool).status('g', 'p', Date.parse('2026-11-02T19:00:00Z'));
-    assert.deepEqual(status, { remainder: 0, total: 5, active_days: 2, today: 1 });
+    assert.deepEqual(status, { remainder: 0, total: 5, active_days: 2, today: 1, held: 0 });
     await assert.rejects(write(100, '2026-10-30T18:00:00Z'), /Out-of-order/);
     assert.equal((await ledger.status('g', 'p')).total, 5);
     const other = await ledger.status('other', 'p');
@@ -59,7 +59,7 @@ test('registrations are per-player and corrections are audited, idempotent and b
     assert.equal(correction.before_ap,1);
     assert.equal(correction.after_ap,0);
     const status = await ledger.status('g','p',Date.parse('2026-10-31T19:00:00Z'));
-    assert.deepEqual(status,{ remainder:50,total:0,active_days:0,today:0 });
+    assert.deepEqual(status,{ remainder:50,total:0,active_days:0,today:0,held:0 });
     assert.equal((await ledger.adjust(input)).duplicate,true);
     await assert.rejects(ledger.adjust({ ...input,requestId:'a2' }), /between 0 and 4/);
     await ledger.adjust({ ...input,requestId:'a3',delta:4,reason:'Restore test credit' });

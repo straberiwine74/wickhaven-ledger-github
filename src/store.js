@@ -6,6 +6,27 @@ export const awardSchema = `CREATE TABLE IF NOT EXISTS ledger_ap_awards (
   guild_id text NOT NULL, ref text NOT NULL, player_id text NOT NULL, day text NOT NULL,
   source text NOT NULL CHECK (source IN ('quest','gathering')), awarded integer NOT NULL CHECK (awarded BETWEEN 0 AND 1),
   detail text NOT NULL DEFAULT '', created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (guild_id, ref))`;
+// held: a quest milestone reached at the daily cap. It is paid on a later day
+// (paid_day) the next time that day has room, before any new AP that day.
+export const awardColumns = [
+  `ALTER TABLE ledger_ap_awards ADD COLUMN IF NOT EXISTS held boolean NOT NULL DEFAULT false`,
+  `ALTER TABLE ledger_ap_awards ADD COLUMN IF NOT EXISTS paid_day text`];
+
+// Pay held milestones into `day` while it has room. Caller holds the player lock.
+export async function settleHeld(db, guildId, playerId, day) {
+  const held = (await db.query('SELECT ref FROM ledger_ap_awards WHERE guild_id=$1 AND player_id=$2 AND held AND day<$3 ORDER BY created_at, ref', [guildId, playerId, day])).rows;
+  if (!held.length) return 0;
+  await db.query('INSERT INTO ledger_test_days (guild_id,player_id,day) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [guildId, playerId, day]);
+  let paid = 0;
+  for (const { ref } of held) {
+    const room = (await db.query('SELECT ap FROM ledger_test_days WHERE guild_id=$1 AND player_id=$2 AND day=$3', [guildId, playerId, day])).rows[0].ap < 4;
+    if (!room) break;
+    await db.query('UPDATE ledger_test_days SET ap=ap+1 WHERE guild_id=$1 AND player_id=$2 AND day=$3', [guildId, playerId, day]);
+    await db.query('UPDATE ledger_ap_awards SET held=false, awarded=1, paid_day=$3 WHERE guild_id=$1 AND ref=$2', [guildId, ref, day]);
+    paid++;
+  }
+  return paid;
+}
 
 export async function isApproved(db, guildId, playerId) {
   return (await db.query("SELECT 1 FROM ledger_test_characters WHERE guild_id=$1 AND player_id=$2 AND status='approved' LIMIT 1", [guildId, playerId])).rows.length > 0;
@@ -13,20 +34,23 @@ export async function isApproved(db, guildId, playerId) {
 
 // Gameplay AP (quest milestones, daily gathering) under the shared 4 AP/day cap.
 // Runs inside the caller's transaction. `ref` makes every award happen once:
-// quest:<character>:<milestone> or gathering:<player>:<day>. A capped award
-// is still recorded (awarded 0) so it can't be farmed later.
+// quest:<character>:<milestone> or gathering:<player>:<day>. At the cap, a
+// quest milestone is held for a later day; daily gathering AP is simply not
+// paid (it is a once-per-day allowance).
 export async function awardGameplayAP(db, { guildId, playerId, source, ref, detail = '', time = Date.now() }) {
   const day = serverDay(new Date(time));
   await db.query('INSERT INTO ledger_test_players (guild_id,player_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [guildId, playerId]);
   await db.query('SELECT remainder FROM ledger_test_players WHERE guild_id=$1 AND player_id=$2 FOR UPDATE', [guildId, playerId]);
   const prior = (await db.query('SELECT awarded,day FROM ledger_ap_awards WHERE guild_id=$1 AND ref=$2', [guildId, ref])).rows[0];
   if (prior) return { duplicate: true, awarded: 0, day: prior.day };
+  await settleHeld(db, guildId, playerId, day);
   await db.query('INSERT INTO ledger_test_days (guild_id,player_id,day) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [guildId, playerId, day]);
   const before = (await db.query('SELECT ap FROM ledger_test_days WHERE guild_id=$1 AND player_id=$2 AND day=$3', [guildId, playerId, day])).rows[0].ap;
   const awarded = before < 4 ? 1 : 0;
   if (awarded) await db.query('UPDATE ledger_test_days SET ap=ap+1 WHERE guild_id=$1 AND player_id=$2 AND day=$3', [guildId, playerId, day]);
-  await db.query('INSERT INTO ledger_ap_awards (guild_id,ref,player_id,day,source,awarded,detail) VALUES ($1,$2,$3,$4,$5,$6,$7)', [guildId, ref, playerId, day, source, awarded, detail.slice(0, 200)]);
-  return { duplicate: false, awarded, day, dailyAP: before + awarded, capped: !awarded };
+  const held = !awarded && source === 'quest';
+  await db.query('INSERT INTO ledger_ap_awards (guild_id,ref,player_id,day,source,awarded,detail,held) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)', [guildId, ref, playerId, day, source, awarded, detail.slice(0, 200), held]);
+  return { duplicate: false, awarded, day, dailyAP: before + awarded, capped: !awarded, held };
 }
 
 export class TestLedger {
@@ -62,6 +86,7 @@ export class TestLedger {
         created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (guild_id,request_id))`);
       for (const sql of characterSchema) await db.query(sql);
       await db.query(awardSchema);
+      for (const sql of awardColumns) await db.query(sql);
       await db.query('COMMIT');
     } catch (e) { await db.query('ROLLBACK'); throw e; }
     finally { db.release(); }
@@ -120,6 +145,8 @@ export class TestLedger {
       const duplicate = await db.query('SELECT 1 FROM ledger_test_events WHERE guild_id=$1 AND (original_id=$2 OR proxy_id=$3)', [guildId, originalId, proxyId]);
       if (duplicate.rows.length) { await db.query('ROLLBACK'); return { duplicate: true }; }
       if (this.requireApproval && !(await isApproved(db, guildId, playerId))) { await db.query('ROLLBACK'); return { duplicate: false, ineligible: true, awarded: 0 }; }
+      const latestDay = (await db.query('SELECT max(day) AS day FROM ledger_test_events WHERE guild_id=$1 AND player_id=$2', [guildId, playerId])).rows[0].day;
+      if (!latestDay || day >= latestDay) await settleHeld(db, guildId, playerId, day);
       // Delayed older-day events cannot retroactively consume newer-day carryover.
       const latest = await db.query('SELECT max(day) AS day FROM ledger_test_events WHERE guild_id=$1 AND player_id=$2', [guildId, playerId]);
       if (latest.rows[0].day && day < latest.rows[0].day) throw new Error('Out-of-order day requires review');
@@ -139,12 +166,31 @@ export class TestLedger {
     try { await db.query('BEGIN'); const r = await awardGameplayAP(db, args); await db.query('COMMIT'); return r; }
     catch (e) { await db.query('ROLLBACK'); throw e; } finally { db.release(); }
   }
+  // Pay held milestones for one player, or (no playerId) every player with
+  // held AP. Called by /ledger-ap and by the bot's hourly sweep.
+  async settle(guildId, playerId = null, time = Date.now()) {
+    const day = serverDay(new Date(time));
+    const players = playerId ? [playerId] : (await this.pool.query('SELECT DISTINCT player_id FROM ledger_ap_awards WHERE guild_id=$1 AND held AND day<$2', [guildId, day])).rows.map(r => r.player_id);
+    let paid = 0;
+    for (const p of players) {
+      const db = await this.pool.connect();
+      try {
+        await db.query('BEGIN');
+        await db.query('INSERT INTO ledger_test_players (guild_id,player_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [guildId, p]);
+        await db.query('SELECT remainder FROM ledger_test_players WHERE guild_id=$1 AND player_id=$2 FOR UPDATE', [guildId, p]);
+        paid += await settleHeld(db, guildId, p, day);
+        await db.query('COMMIT');
+      } catch (e) { await db.query('ROLLBACK'); throw e; } finally { db.release(); }
+    }
+    return paid;
+  }
   async status(guildId, playerId, time = Date.now()) {
     const result = await this.pool.query(`SELECT
       COALESCE((SELECT remainder FROM ledger_test_players WHERE guild_id=$1 AND player_id=$2),0) AS remainder,
       COALESCE((SELECT sum(ap) FROM ledger_test_days WHERE guild_id=$1 AND player_id=$2),0)::integer AS total,
       (SELECT count(*) FROM ledger_test_days WHERE guild_id=$1 AND player_id=$2 AND ap>0)::integer AS active_days,
-      COALESCE((SELECT ap FROM ledger_test_days WHERE guild_id=$1 AND player_id=$2 AND day=$3),0) AS today`, [guildId, playerId, serverDay(new Date(time))]);
+      COALESCE((SELECT ap FROM ledger_test_days WHERE guild_id=$1 AND player_id=$2 AND day=$3),0) AS today,
+      (SELECT count(*) FROM ledger_ap_awards WHERE guild_id=$1 AND player_id=$2 AND held)::integer AS held`, [guildId, playerId, serverDay(new Date(time))]);
     return result.rows[0];
   }
 }

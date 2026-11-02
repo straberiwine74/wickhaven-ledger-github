@@ -3,7 +3,7 @@ import { importBags, hasResourceChanges, matchesEnding, resourceReceipt } from '
 import { transition, defaultDie, questOf, available, isTerminal } from './quest-engine.js';
 import { getQuest } from './quests/index.js';
 import { SKILLS, ABILITIES, LEGACY_SKILLS, apMilestones } from './quest-schema.js';
-import { awardGameplayAP, awardSchema } from './store.js';
+import { awardGameplayAP, awardSchema, awardColumns } from './store.js';
 export { transition };
 
 export const skillNames = LEGACY_SKILLS;
@@ -119,7 +119,7 @@ export function tideBoxOffered(run) {
 
 export class QuestStore {
   constructor(pool, die=defaultDie) { this.pool=pool; this.die=die; }
-  async init() { for (const sql of questSchema) await this.pool.query(sql); await this.pool.query(awardSchema); }
+  async init() { for (const sql of questSchema) await this.pool.query(sql); await this.pool.query(awardSchema); for (const sql of awardColumns) await this.pool.query(sql); }
   async open(s) {
     s=validateSnapshot(s);
     const db=await this.pool.connect();
@@ -177,12 +177,12 @@ export class QuestStore {
           if(m===quest.completion.milestone) state.text+=fresh?quest.completion.first:quest.completion.repeat;
           if(fresh&&paying.has(m)) {
             const r=await awardGameplayAP(db,{guildId:guild,playerId:run.player_id,source:'quest',ref:`quest:${run.character_id}:${m}`,detail:`${quest.id} ${m}`});
-            ap+=r.awarded;if(r.capped) capped++;
+            ap+=r.awarded;if(r.held) capped++;
           }
         }
         state.apAwarded=ap;state.apCapped=capped;
         if(ap) state.text+=`\n**+${ap} AP** for ${ap===1?'a first-time milestone':'first-time milestones'}.`;
-        if(capped) state.text+=`\nDaily AP cap reached: ${capped===1?'that milestone was':'those milestones were'} recorded without AP.`;
+        if(capped) state.text+=`\nYou\u2019re at today\u2019s 4 AP cap, so **${capped} AP** is held and will be added tomorrow.`;
       }
       await db.query('INSERT INTO ledger_quest_test_events(run_id,revision,action,state) VALUES($1,$2,$3,$4)',[id,revision+1,action,JSON.stringify(state)]);
       const saved=(await db.query('UPDATE ledger_quest_test_runs SET state=$2,revision=revision+1,finished=$3 WHERE id=$1 RETURNING *',[id,JSON.stringify(state),isTerminal(state.scene)])).rows[0];

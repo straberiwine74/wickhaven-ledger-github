@@ -59,9 +59,16 @@ test('gathering and quest AP are once-only and share the 4 AP daily cap with wri
     const a=await ledger.awardGameplay({guildId:'g',playerId:'p',source:'gathering',ref:'gathering:p:2026-11-02',time:t});assert.equal(a.awarded,1);
     assert.equal((await ledger.awardGameplay({guildId:'g',playerId:'p',source:'gathering',ref:'gathering:p:2026-11-02',time:t})).duplicate,true);
     await ledger.record({guildId:'g',playerId:'p',originalId:'o',proxyId:'x',words:900,time:'2026-11-02T18:00:00Z'});
-    const capped=await ledger.awardGameplay({guildId:'g',playerId:'p',source:'quest',ref:'quest:c:m',time:t});assert.equal(capped.awarded,0);assert.equal(capped.capped,true);
+    const capped=await ledger.awardGameplay({guildId:'g',playerId:'p',source:'quest',ref:'quest:c:m',time:t});assert.equal(capped.awarded,0);assert.equal(capped.held,true);
+    const gatherCapped=await ledger.awardGameplay({guildId:'g',playerId:'p',source:'gathering',ref:'gathering:p:x',time:t});assert.equal(gatherCapped.held,false);
     assert.equal((await ledger.awardGameplay({guildId:'g',playerId:'p',source:'quest',ref:'quest:c:m',time:t+86400000})).duplicate,true);
-    assert.equal((await ledger.status('g','p',t)).today,4);
+    let st=await ledger.status('g','p',t);assert.equal(st.today,4);assert.equal(st.held,1);
+    assert.equal(await ledger.settle('g',null,t),0); // same day: still no room
+    const tomorrow=t+86400000;
+    // Writing the next day pays the held AP first, then credits words.
+    const w=await ledger.record({guildId:'g',playerId:'p',originalId:'o2',proxyId:'x2',words:300,time:new Date(tomorrow).toISOString()});assert.equal(w.awarded,1);assert.equal(w.dailyAP,2);
+    st=await ledger.status('g','p',tomorrow);assert.equal(st.today,2);assert.equal(st.held,0);assert.equal(st.total,6);
+    assert.equal((await d.query("SELECT paid_day FROM ledger_ap_awards WHERE ref='quest:c:m'")).rows[0].paid_day,'2026-11-03');
   } finally {await d.close();}
 });
 test('live quests award 1 AP per first-time milestone; test quests award none',async()=>{
@@ -85,5 +92,15 @@ test('live quests award 1 AP per first-time milestone; test quests award none',a
     const again=await play('live-trial');assert.equal(again.state.apAwarded,0);assert.match(again.state.text,/Again/);
     const testRun=await play('test-trial');assert.equal(testRun.state.apAwarded,0);assert.doesNotMatch(testRun.state.text,/AP\*\*/);
     assert.deepEqual((await d.query("SELECT ref,awarded FROM ledger_ap_awards ORDER BY ref")).rows,[{ref:'quest:beyond-789:found-key',awarded:1},{ref:'quest:beyond-789:live-done',awarded:1}]);
+  } finally {await d.close();}
+});
+test('held quest AP is paid by the hourly sweep on a later day, never twice',async()=>{
+  const {d,ledger,approve}=await db();
+  try {
+    await approve('p');const t=Date.parse('2026-11-02T18:00:00Z');
+    await ledger.record({guildId:'g',playerId:'p',originalId:'o',proxyId:'x',words:1200,time:'2026-11-02T18:00:00Z'});
+    for(const m of ['a','b']) assert.equal((await ledger.awardGameplay({guildId:'g',playerId:'p',source:'quest',ref:'quest:c:'+m,time:t})).held,true);
+    const next=t+86400000;assert.equal(await ledger.settle('g',null,next),2);assert.equal(await ledger.settle('g',null,next),0);
+    const st=await ledger.status('g','p',next);assert.equal(st.today,2);assert.equal(st.held,0);assert.equal(st.active_days,2);
   } finally {await d.close();}
 });
