@@ -29,24 +29,44 @@ export function departureFailure(stage,error) {
 // Warn at or below half maximum HP (bloodied). 0 HP is blocked in QuestStore.open.
 export const lowHp=s=>s.hp>0&&s.hp*2<=s.maxHp;
 
+const clean=t=>String(t).replace(/[\*_~<>@`|]/g,'');
+const signed=n=>(n>=0?'+':'−')+Math.abs(n);
+const fit=(lines,max=1024,more='…more in the attached receipt')=>{let out='';for(const line of lines){if((out+line+'\n'+more).length>max){return out+more;}out+=line+'\n';}return out.trim()||'—';};
+const skillLabel={athletics:'Athletics',stealth:'Stealth',investigation:'Investigation',perception:'Perception'};
+export function reviewEmbed(run,knowledge=[]) {
+  const s=run.snapshot,low=lowHp(s),fields=[];
+  if(low) fields.push({name:'⚠️ Low HP',value:`You can still depart, but consider resting in Avrae first, then run \`!depart drowned-watch\` again.`});
+  fields.push({name:'❤️ Hit Points',value:`**${s.hp}** / ${s.maxHp}${s.tempHp?`\n+${s.tempHp} temporary`:''}`,inline:true});
+  fields.push({name:'👁️ Passive Perception',value:`**${s.passive}**\ndeclared — check your sheet`,inline:true});
+  const coins=['pp','gp','ep','sp','cp'].filter(k=>s.coins[k]).map(k=>`**${s.coins[k]}** ${k}`).join(' · ')||'none';
+  fields.push({name:'💰 Coins',value:`${coins}${s.v===2?`\n${({'avrae-coinpurse':'from Avrae coin purse','bag-coin-pouch':'from bag coin pouch','none':'no coins carried'})[s.loadout.coinsSource]}`:''}`,inline:true});
+  fields.push({name:'🎲 Skills',value:Object.keys(skillLabel).map(k=>{const v=s.skills[k];return `${skillLabel[k]} **${signed(v.mod)}**${v.adv===true?' (adv)':v.adv===false?' (dis)':''}`;}).join(' · ')});
+  const groups=s.v===2?s.loadout.bags.map(b=>b[0]):[null];
+  // Discord caps a whole embed at 6000 characters; share an inventory budget across bags.
+  const budget=Math.min(1024,Math.floor(3000/Math.max(1,Math.min(groups.length,12))));
+  for(const bag of groups.slice(0,12)) {
+    const items=s.loadout.items.filter(i=>(i.bag??null)===bag).map(i=>`${i.qty}× ${clean(i.name)}`);
+    fields.push({name:bag===null?'🎒 Declared inventory':`🎒 ${clean(bag)}`,value:items.length?fit(items,budget):'*empty*',inline:true});
+  }
+  if(knowledge.length) fields.push({name:'📜 Known observations',value:fit(knowledge.map(k=>'• '+k.replaceAll('-',' ')[0].toUpperCase()+k.replaceAll('-',' ').slice(1)))});
+  return {
+    title:`Drowned Watch — Departure Review`,
+    url:`https://www.dndbeyond.com/characters/${s.character.slice(7)}`,
+    description:`**${clean(s.name)}** is ready to set out. Review everything below. **Confirming locks this expedition.**\n*TEST only: no AP, gold, or sheet write-back.*`,
+    color:low?0xE0A526:0x2E8B9A,
+    fields,
+    footer:{text:'Tools, spells, and reroll features aren’t supported yet. Don’t confirm if anything is wrong — discard and fix it in Avrae.'}
+  };
+}
+
 export function questView(run, knowledge=[]) {
   const s=run.snapshot, state=run.state;
   let content=`**Drowned Watch — TEST • ${s.name.replace(/[\*_~<>@]/g,'')}**\n${state.text}`;
-  if(state.scene==='review') {
-    if(lowHp(s)) content+=`\n**⚠️ Low HP warning:** ${s.hp}/${s.maxHp} HP${s.tempHp?` (+${s.tempHp} temporary)`:''}. You can still depart, but consider resting in Avrae first, then run !depart drowned-watch again.`;
-    content+=`\nSheet: https://www.dndbeyond.com/characters/${s.character.slice(7)}\nHP ${s.hp}/${s.maxHp} (+${s.tempHp} temporary) • Passive Perception ${s.passive} (declared; verify against sheet)\n`;
-    content+=Object.entries(s.skills).map(([k,v])=>`${k} ${v.mod>=0?'+':''}${v.mod}${v.adv===true?' advantage':v.adv===false?' disadvantage':''}`).join(' • ');
-    content+='\n'+(s.v===2?'Carried bags inventory: ':'Declared inventory: ')+(s.loadout.items.slice(0,12).map(i=>`${i.qty} × ${i.name}${i.bag?' ['+i.bag+']':''}`).join('; ')||'none');
-    if(s.loadout.items.length>12) content+='\nFull inventory is in the attached receipt; review it before confirming.';
-    if(s.v===2) content+=`\nCurrency source: ${s.loadout.coinsSource}.`;
-    content+='\nCoins: '+Object.entries(s.coins).map(([k,v])=>`${v} ${k}`).join(', ');
-    content+='\nTools, spells, reroll features and automatic resource write-back remain unsupported. Passive Perception is declared. Do not confirm incorrect data.';
-  }
   if(knowledge.length) content+='\n**Known observations:** '+knowledge.map(k=>k.replaceAll('-',' ')).join('; ');
   const choices={review:[['confirm','Confirm loadout'],['cancel','Discard unconfirmed departure']],shore:[['climb','Climb exposed stairs'],['sneak','Time the culvert crossing'],['study','Study harbor marks'],['retreat','Return to town']],landing:[['finish','Record findings & return'],...(tideBoxOffered(run)?[['tidebox','Leave 1 gp in the tide-box (spends 1 gp)']]:[]),['retreat','Retreat unfinished']],town:[['resume','Return to the Watch']],complete:[],cancelled:[]}[state.scene];
   const buttons=choices.map(([action,label])=>new ButtonBuilder().setCustomId(`quest:${run.id}:${run.revision}:${action}`).setLabel(label).setStyle(ButtonStyle.Secondary));
   const utility=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`quest:${run.id}:${run.revision}:supplies`).setLabel('View supplies & saved roll').setStyle(ButtonStyle.Secondary),new ButtonBuilder().setCustomId(`quest:${run.id}:${run.revision}:race`).setLabel('Staff: test simultaneous clicks').setStyle(ButtonStyle.Secondary));
-  const payload={content:'**The Wickhaven Ledger • Expedition TEST**',embeds:[{description:content}],components:[...(buttons.length?[new ActionRowBuilder().addComponents(buttons)]:[]),utility],allowedMentions:{parse:[]}};
+  const payload={content:'**The Wickhaven Ledger • Expedition TEST**',embeds:[state.scene==='review'?reviewEmbed(run,knowledge):{description:content}],components:[...(buttons.length?[new ActionRowBuilder().addComponents(buttons)]:[]),utility],allowedMentions:{parse:[]}};
   if(state.scene==='review') payload.files=suppliesView(run).files;
   if(state.scene==='complete'&&hasResourceChanges(run)) {
     payload.embeds.push({description:`Changes to copy into Avrae: ${changeSummary(run)}\nUpdate your Avrae bags/HP/currency using the receipt, then verify with:\n\`!depart reconcile ${run.id}\`\nNew visits are blocked until the exported ending resources match. No automatic write-back occurs.`});

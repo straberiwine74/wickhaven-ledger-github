@@ -4,7 +4,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { TestLedger } from '../src/store.js';
 import { QuestStore, validateSnapshot, transition, tideBoxOffered } from '../src/quest.js';
 import { BAG_COLLECTION, importBags, resources, resourceReceipt, spendResources, matchesEnding } from '../src/quest-resources.js';
-import { suppliesView, installQuests, questView, lowHp } from '../src/quest-discord.js';
+import { suppliesView, installQuests, questView, lowHp, reviewEmbed } from '../src/quest-discord.js';
 import { runClickDiagnostic } from '../src/quest-race.js';
 
 const g='111111111111111111',p='222222222222222222';
@@ -127,9 +127,24 @@ test('tide-box cost: simultaneous clicks spend once, receipt is pending, wrong e
 test('departure review warns at or below half HP and new departures are blocked at 0 HP',async()=>fixture(async({store})=>{
   const at=(hp,maxHp=20)=>({...input(),hp,maxHp});
   assert.equal(lowHp(at(11)),false);assert.equal(lowHp(at(10)),true);assert.equal(lowHp(at(1,23)),true);assert.equal(lowHp(at(0)),false);
-  const low=await store.open(at(1,23));assert.match(questView(low).embeds[0].description,/Low HP warning:\*\* 1\/23 HP \(\+3 temporary\)/);
+  const low=await store.open(at(1,23));const lowEmbed=questView(low).embeds[0];assert.equal(lowEmbed.fields[0].name,'⚠️ Low HP');assert.match(lowEmbed.fields[1].value,/\*\*1\*\* \/ 23\n\+3 temporary/);assert.equal(lowEmbed.color,0xE0A526);
   await store.act(low.id,g,p,0,'cancel');
-  const healthy=await store.open(at(20));assert.doesNotMatch(questView(healthy).embeds[0].description,/Low HP/);
+  const healthy=await store.open(at(20));assert.ok(!questView(healthy).embeds[0].fields.some(f=>/Low HP/.test(f.name)));
   await store.act(healthy.id,g,p,0,'cancel');
   await assert.rejects(store.open(at(0)),/Recover HP before starting a new expedition/);
 }));
+test('departure review embed groups items by bag, shows empty bags and stays within Discord limits',()=>{
+  const snapshot=validateSnapshot(input());snapshot.loadout.bags.push(['Belt',{}]);
+  const e=questView({id:'r',revision:0,snapshot,state:{scene:'review',text:'Review'}},['tide-rota']).embeds[0];
+  const bag=n=>e.fields.find(f=>f.name==='🎒 '+n);
+  assert.equal(bag('Backpack').value,"3× Rations\n1× Jeweler's Tools");assert.equal(bag('Satchel').value,'2× Rations');assert.equal(bag('Belt').value,'*empty*');
+  assert.match(e.fields.find(f=>f.name==='💰 Coins').value,/\*\*4\*\* gp\nfrom Avrae coin purse/);
+  assert.match(e.fields.find(f=>f.name==='📜 Known observations').value,/Tide rota/);
+  const big=validateSnapshot(input());big.loadout.items=Array.from({length:60},(_,i)=>({bag:'Backpack',name:'Very long equipment name '+i+'x'.repeat(40),qty:1}));
+  const b=questView({id:'r',revision:0,snapshot:big,state:{scene:'review',text:''}}).embeds[0];
+  assert.ok(b.fields.length<=25&&b.fields.every(f=>f.value.length<=1024&&f.name.length<=256));assert.match(b.fields.find(f=>f.name==='🎒 Backpack').value,/more in the attached receipt/);
+  assert.ok(JSON.stringify(b).length<6000);
+  const many=validateSnapshot(input());many.loadout.bags=Array.from({length:12},(_,n)=>['Bag '+n,Object.fromEntries(Array.from({length:5},(_,i)=>['Long item name number '+i+'y'.repeat(40),1]))]);
+  const m=reviewEmbed({snapshot:validateSnapshot(many),state:{scene:'review'}},Array.from({length:6},(_,i)=>'fact-'+i));
+  const size=[m.title,m.description,m.footer.text,...m.fields.flatMap(f=>[f.name,f.value])].join('').length;assert.ok(size<6000,String(size));assert.ok(m.fields.length<=25);
+});
