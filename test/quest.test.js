@@ -3,7 +3,13 @@ import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
 import { TestLedger } from '../src/store.js';
 import { QuestStore, validateSnapshot, verifyExport, transition } from '../src/quest.js';
-import { questView } from '../src/quest-discord.js';
+import { questView, departureFailure } from '../src/quest-discord.js';
+
+test('departure diagnostics explain known errors and hide unexpected private details',()=>{
+  assert.match(departureFailure('Ledger approval and expedition save',new Error('This imported sheet needs Ledger TEST approval first.')),/TEST approval first/);
+  assert.doesNotMatch(departureFailure('signature',new Error('postgres://secret-token@example')),/secret-token/);
+  assert.match(departureFailure('export format',new Error('parse failure')),/export format/);
+});
 
 const guild='111111111111111111',player='222222222222222222',channel='333333333333333333',invocation='444444444444444444',avrae='555555555555555555';
 const snapshot=()=>({v:1,quest:'drowned-watch',guild,player,channel,invocation,character:'beyond-123',name:'Mara',hp:23,maxHp:25,tempHp:2,skills:Object.fromEntries(['athletics','stealth','investigation','perception'].map(k=>[k,{mod:3,adv:null}])),passive:15,loadout:{source:'declared-manifest',items:[{name:'Rope',qty:1}]},coins:{pp:0,gp:10,ep:0,sp:0,cp:0},signature:'test'});

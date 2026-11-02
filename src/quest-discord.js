@@ -1,6 +1,12 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
 import { QuestStore, verifyExport } from './quest.js';
 
+export function departureFailure(stage,error) {
+  const safe=new Set(['Departure data was truncated or malformed.','Unsupported snapshot or quest.','Use an imported D&D Beyond character.','Invalid HP.','Declare and review actual passive Perception.','A declared loadout is required (maximum 20 entries).','Invalid loadout item.','Combine duplicate inventory entries.','Invalid coins.','Missing Avrae signature.','Snapshot too large. Reduce manifest entries.','Only configured Avrae exports are accepted.','Wrong export channel/server.','Export expired. Run departure again.','Avrae signature verification unavailable.','Use the installed server departure alias; personal aliases are not accepted.','Signed departure expired.','This imported sheet needs Ledger TEST approval first.']);
+  const detail=safe.has(error?.message)?error.message:'The check did not complete; staff can inspect the daemon log.';
+  return `Departure stopped at **${stage}**. ${detail}\nNo reset or additional reward was applied. Existing saved progress is preserved.`;
+}
+
 export function questView(run, knowledge=[]) {
   const s=run.snapshot, state=run.state;
   let content=`**Drowned Watch — TEST • ${s.name.replace(/[\*_~<>@]/g,'')}**\n${state.text}`;
@@ -23,13 +29,22 @@ export async function installQuests(client,pool,config) {
     if(message.guildId!==config.guild || message.channelId!==config.channel || message.author.id!==config.avrae || !message.author.bot || message.webhookId) return;
     const embed=message.embeds.find(e=>e.title==='BTLL departure v1');
     if(!embed) return;
+    let stage='export format';
     try {
       const match=/^```json\n([\s\S]+)\n```$/.exec(embed.description??'');
       if(!match) throw new Error('Departure data was truncated or malformed.');
-      const s=JSON.parse(match[1]); await verifyExport(s,message,config);
+      const s=JSON.parse(match[1]);
+      stage='character data and Avrae signature';
+      await verifyExport(s,message,config);
+      stage='Ledger approval and expedition save';
       const run=await store.open(s);
+      stage='confirmation message';
       await message.reply(questView(run,await store.knowledge(run)));
-    } catch { await message.reply({content:'Departure could not be accepted. Check the installed server alias, TEST-approved sheet, declared manifest/passive, and export size; then run !depart drowned-watch again. No expedition reset or reward was applied.',allowedMentions:{parse:[]}}).catch(()=>{}); }
+    } catch(error) {
+      const code=/^[A-Z0-9_]{1,20}$/.test(String(error?.code??''))?String(error.code):'unspecified';
+      console.error(`Quest departure failed: stage=${stage}; code=${code}`);
+      await message.reply({content:departureFailure(stage,error),allowedMentions:{parse:[]}}).catch(()=>console.error('Quest failure notice could not be posted.'));
+    }
   });
   client.on('interactionCreate',async interaction=>{
     if(!interaction.isButton() || !interaction.customId.startsWith('quest:')) return;

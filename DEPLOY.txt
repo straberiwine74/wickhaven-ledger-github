@@ -1,0 +1,10 @@
+Departure diagnostic update
+
+Replace src/quest-discord.js in your existing repository with the file at the same path in this ZIP. The test/quest.test.js file contains the updated local tests and may also be uploaded.
+Push to GitHub main and let Vercel redeploy. No installer, environment-variable changes, database changes or alias changes are needed. Existing quest progress is preserved.
+
+Commit message:
+fix: show departure validation failure stages
+
+Then run !depart drowned-watch again and share the Ledger response.
+This update improves diagnostics; it does not claim to fix the underlying rejection.
