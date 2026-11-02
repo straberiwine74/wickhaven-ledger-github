@@ -137,9 +137,6 @@ client.on(Events.MessageCreate, async message => {
       timers.add(timer);
       return;
     }
-    await report(message.webhookId
-      ? `**Proxy/webhook message** • ${words} words • Message ID: ${message.id}\nPlayer attribution: **unverified**. Display names do not prove ownership. No AP awarded.`
-      : `**Original player message** • ${words} words • Message ID: ${message.id} • Player ID: ${message.author.id}\nNo AP awarded. If Tupperbox replaces it, its deletion should also be detected.`);
   } catch { console.error('Diagnostic message could not be sent; check channel permissions.'); }
 });
 client.on(Events.MessageDelete, async message => {
