@@ -6,7 +6,7 @@ export default {
   "id": "second-beacon",
   "name": "The Second Beacon",
   "emoji": "🔥",
-  "status": "test",
+  "status": "live",
   "start": "split-headland",
   "requires": {
     "facts": ["second-beacon-route"],

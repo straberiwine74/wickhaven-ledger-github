@@ -5,7 +5,7 @@ export default {
   "id": "briarfall-road",
   "name": "Briarfall Road",
   "emoji": "🪧",
-  "status": "test",
+  "status": "live",
   "start": "north-road",
   "completion": {
     "milestone": "briarfall-reconnaissance",
