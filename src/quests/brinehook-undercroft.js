@@ -9,6 +9,7 @@ export default {
   "start": "market-stairs",
   "completion": {
     "milestone": "brinehook-records",
+    "ap": 1,
     "first": " First undercroft search recorded (journal only; no AP or gold).",
     "repeat": " Repeat visit recorded. No additional reward."
   },

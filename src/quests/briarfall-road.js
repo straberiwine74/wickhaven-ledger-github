@@ -9,6 +9,7 @@ export default {
   "start": "north-road",
   "completion": {
     "milestone": "briarfall-reconnaissance",
+    "ap": 1,
     "first": " First Briarfall Road expedition recorded (journal only; no AP or gold).",
     "repeat": " Repeat visit recorded. No additional reward."
   },

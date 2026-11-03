@@ -9,6 +9,7 @@ export default {
   "start": "orchard-gate",
   "completion": {
     "milestone": "orra-orchard-discovery",
+    "ap": 1,
     "first": " First orchard visit recorded (journal only; no AP or gold).",
     "repeat": " Repeat visit recorded. No additional reward."
   },

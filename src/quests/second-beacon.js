@@ -15,6 +15,7 @@ export default {
   },
   "completion": {
     "milestone": "second-beacon-survey",
+    "ap": 1,
     "first": " First Second Beacon expedition recorded (journal only; no AP or gold).",
     "repeat": " Repeat visit recorded. No additional reward."
   },
