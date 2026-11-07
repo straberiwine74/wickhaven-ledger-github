@@ -147,7 +147,7 @@ export async function installQuests(client,pool,config) {
   const store=new QuestStore(pool); await store.init();
   client.on('messageCreate',async message=>{
     if(message.guildId!==config.guild || !questChannels(config).includes(message.channelId) || message.author.id!==config.avrae || !message.author.bot || message.webhookId) return;
-    const embed=message.embeds.find(e=>e.title==='BTLL departure v1');
+    const embed=message.embeds.find(e=>e.title==='Chronicles of Thaleryn Solo Expedition'||e.title==='BTLL departure v1');
     if(!embed) return;
     let stage='export format';
     try {
