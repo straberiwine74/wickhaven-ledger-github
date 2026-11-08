@@ -7,20 +7,7 @@
 //                           earn AP (defaults below: OOC, setup, rules and staff spaces)
 // HUNTING_CHANNEL_ID, MINING_CHANNEL_ID   gathering channels (1 AP/day total)
 export const DEFAULT_EXCLUDED=[
-  '1566204441198203080', // START HERE category: welcome, rules, how-to-play, announcements, bot-testing, change-log
-  '1566206327448010752', // STAFF ONLY category
-  '1566205089633534093', // general (OOC)
-  '1566463751274758184', // help-and-questions
-  '1566233195110989874', // roll-stats
-  '1566205298870325288', // character-approval
-  '1566468759835910244', // character-directory (player reference, not scenes)
-  '1566205610595455027', // looking-for-company (OOC planning)
-  '1566205563644416201', // quest-board
-  '1566205702832263271', // departures (commands)
-  '1566206194090246295', // the-map-room (staff maintained)
-  '1566217493419266211', // adult-rp-guidelines
-  '1566217524041875648', // adult-ooc
-  '1566217708754829392'  // optional-access
+
 ];
 const ids=v=>String(v??'').split(',').map(s=>s.trim()).filter(s=>/^\d{17,20}$/.test(s));
 export function liveConfig(env=process.env) {
