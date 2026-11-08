@@ -15,7 +15,7 @@ export async function reviewInteraction(interaction,ledger,guildId){
   if(resubmit){
     try{
       await interaction.deferReply({flags:MessageFlags.Ephemeral});
-      if(interaction.guildId!==guildId||!ledger?.reviewPosts||interaction.channel?.parentId!==ledger.reviewPosts.forumId)throw new UserError('Use this control in the character review post.');
+      if(interaction.guildId!==guildId||!ledger?.reviewPosts||interaction.channel?.parentId!==ledger.reviewPosts.forumId)throw new UserError('Use this control in your character review thread.');
       const c=await ledger.reviewPosts.byKey(resubmit[1]);
       if(c.player_id!==interaction.user.id)throw new UserError('Only the player who submitted this character may resubmit it.');
       await ledger.characters.resubmit(guildId,interaction.user.id,c.name,Number(resubmit[2]));
@@ -29,7 +29,7 @@ export async function reviewInteraction(interaction,ledger,guildId){
   try{
     if(interaction.guildId!==guildId||!canReview(interaction))throw new UserError('Only administrators and configured Moderators can review submissions.');
     if(!ledger?.reviewPosts)throw new UserError('Public reviews are not configured.');
-    if(interaction.channel?.parentId!==ledger.reviewPosts.forumId)throw new UserError('Use these controls in the configured character-review forum.');
+    if(interaction.channel?.parentId!==ledger.reviewPosts.forumId)throw new UserError('Use these controls in the character review thread.');
     const [,kind,decision,key,revisionText]=match;
     const revision=Number(revisionText);
     if(kind==='char-review'&&interaction.isButton()){

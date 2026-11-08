@@ -5,7 +5,7 @@ import { countWords } from './activity.js';
 import { ProxyTracker } from './proxy.js';
 import { commands, handleCommand } from './commands.js';
 import { UserError } from './admin.js';
-import { ReviewPosts, missingForumPermissions } from './review-posts.js';
+import { ReviewPosts, missingReviewPermissions } from './review-posts.js';
 import { reviewInteraction } from './review-interactions.js';
 import { CharacterNotifications } from './character-notifications.js';
 import { installQuests } from './quest-discord.js';
@@ -95,12 +95,12 @@ client.once(Events.ClientReady, async () => {
     const modId = (process.env.MODERATOR_ROLE_IDS ?? '').split(',')[0].trim();
     const modRole = /^\d{17,20}$/.test(modId) ? await guild.roles.fetch(modId).catch(() => null) : null;
     console.log(`Moderator role for reviews: ${modRole ? `${modRole.name} (${modId})` : `NOT FOUND (${modId || 'unset'})`}.`);
-    for (const [label, key] of [['Character review forum','CHARACTERS_CHANNEL_ID'],['AP log','AP_LOG_CHANNEL_ID'],['Quest channel','QUEST_CHANNEL_ID'],['Quest test channel','QUEST_TEST_CHANNEL_ID'],['Test channel','TEST_CHANNEL_ID'],['Quest feedback forum','QUEST_FEEDBACK_FORUM_ID'],['Quest feedback log','QUEST_FEEDBACK_LOG_CHANNEL_ID']]) {
+    for (const [label, key] of [['Character review channel','CHARACTERS_CHANNEL_ID'],['AP log','AP_LOG_CHANNEL_ID'],['Quest channel','QUEST_CHANNEL_ID'],['Quest test channel','QUEST_TEST_CHANNEL_ID'],['Test channel','TEST_CHANNEL_ID'],['Quest feedback forum','QUEST_FEEDBACK_FORUM_ID'],['Quest feedback log','QUEST_FEEDBACK_LOG_CHANNEL_ID']]) {
       const id = (process.env[key] ?? '').trim();
       if (!id) { console.log(`${label}: not set (${key}).`); continue; }
       const ch = await client.channels.fetch(id).catch(e => ({ error: e.code ?? 'unknown' }));
       if (!ch || ch.error) { console.log(`${label}: NOT VISIBLE (${id}, Discord ${ch?.error ?? 'unknown'}). Check ${key} and the Ledger's View Channel permission.`); continue; }
-      const extra = key === 'CHARACTERS_CHANNEL_ID' ? missingForumPermissions(ch, client.user) : [];
+      const extra = key === 'CHARACTERS_CHANNEL_ID' ? missingReviewPermissions(ch, client.user) : [];
       console.log(`${label}: #${ch.name} (${id})${extra.length ? ` MISSING ${extra.join(', ')}` : ''}.`);
     }
     for (const command of [...commands, ...(questFeedback ? [questFeedbackCommand] : [])]) await guild.commands.create(command);
@@ -128,7 +128,7 @@ client.on(Events.InteractionCreate, async interaction => {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const characterCommand=['ledger-character','ledger-review','ledger-approve','ledger-reject'].includes(interaction.commandName);
     const inReviews=process.env.CHARACTERS_CHANNEL_ID&&(interaction.channelId===process.env.CHARACTERS_CHANNEL_ID||interaction.channel?.parentId===process.env.CHARACTERS_CHANNEL_ID);
-    if (interaction.guildId !== DISCORD_GUILD_ID || (!live.live && interaction.channelId !== TEST_CHANNEL_ID&&!(characterCommand&&inReviews))) return await interaction.editReply(notice('Wrong channel', 'Use this command in bot-testing, or use character commands inside the character review forum.', 'neutral'));
+    if (interaction.guildId !== DISCORD_GUILD_ID || (!live.live && interaction.channelId !== TEST_CHANNEL_ID&&!(characterCommand&&inReviews))) return await interaction.editReply(notice('Wrong channel', 'Use this command in bot-testing, or use character commands inside your character review thread.', 'neutral'));
     if (!ledger) return await interaction.editReply(notice('Ledger offline', 'Saved AP testing is turned off right now.', 'neutral'));
     const result = await handleCommand(interaction,ledger,DISCORD_GUILD_ID);
     await interaction.editReply(typeof result === 'string' ? notice(null, result, 'info') : result);

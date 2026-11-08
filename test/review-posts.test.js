@@ -12,20 +12,25 @@ const input={name:'Ryder',sheet:'https://www.dndbeyond.com/characters/123',stats
 function transport(){
   const all=new Collection();let creates=0,pings=0;let fail=false;
   const normalize=p=>({...p,embeds:(p.embeds??[]).map(e=>e.toJSON?e.toJSON():e)});
-  const forum={id:f,name:'character-approval',guildId:g,type:ChannelType.GuildForum,availableTags:[],flags:{bitfield:0},permissionsFor:()=>({has:()=>true}),guild:{roles:{fetch:async()=>({mentionable:true})}}};
-  forum.threads={fetchActive:async()=>({threads:all}),fetchArchived:async()=>({threads:new Collection(),hasMore:false}),create:async data=>{
-    if(fail)throw new Error('Simulated missing Send Messages permission');
+  const channel={id:f,name:'character-submission',guildId:g,type:ChannelType.GuildText,permissionsFor:()=>({has:()=>true}),guild:{roles:{fetch:async()=>({mentionable:true})}}};
+  channel.threads={fetchActive:async()=>({threads:all}),fetchArchived:async()=>({threads:new Collection(),hasMore:false}),create:async data=>{
+    if(fail)throw new Error('Simulated missing Create Private Threads permission');
     creates++;
     const id=String(1566206000000000000n+BigInt(creates));
     const messages=new Collection();
-    const starter={id,author:{id:'bot'},...normalize(data.message),edit:async payload=>Object.assign(starter,normalize(payload))};
-    messages.set(id,starter);
-    const thread={id,name:data.name,parentId:f,ownerId:'bot',archived:false,setName:async name=>{thread.name=name;return thread;},fetchStarterMessage:async()=>starter,messages:{fetch:async()=>messages},send:async payload=>{
-      pings++;const message={id:'ping'+pings,author:{id:'bot'},...normalize(payload)};messages.set(message.id,message);return message;
-    }};
+    const thread={id,name:data.name,type:data.type,parentId:f,ownerId:'bot',archived:false,members:new Set(),first:null,
+      setName:async name=>{thread.name=name;return thread;},setArchived:async v=>{thread.archived=v;},
+      messages:{fetch:async arg=>typeof arg==='string'?messages.get(arg):messages},
+      send:async payload=>{
+        const message={id:id+'-'+messages.size,author:{id:'bot'},...normalize(payload)};
+        message.edit=async p=>Object.assign(message,normalize(p));
+        if(messages.size)pings++;else thread.first=message;
+        messages.set(message.id,message);return message;
+      }};
+    thread.members.add=async user=>{Set.prototype.add.call(thread.members,user);};
     all.set(id,thread);return thread;
   }};
-  return {client:{user:{id:'bot'},channels:{fetch:async id=>id===f?forum:all.get(id)}},all,get creates(){return creates;},get pings(){return pings;},set fail(value){fail=value;}};
+  return {client:{user:{id:'bot'},channels:{fetch:async id=>id===f?channel:all.get(id)}},all,get creates(){return creates;},get pings(){return pings;},set fail(value){fail=value;}};
 }
 test('public review creates once, mentions only moderators, updates resubmissions and decisions',async()=>{
   const db=new PGlite();
@@ -35,14 +40,15 @@ test('public review creates once, mentions only moderators, updates resubmission
   try{
     await ledger.init();await ledger.characters.submit(g,'player',input);
     const url=await posts.sync('player','Ryder');assert.match(url,/discord.com\/channels/);assert.equal(discord.creates,1);
-    assert.equal(discord.all.first().name,'Ryder');
-    const starter=await discord.all.first().fetchStarterMessage();
-    assert.deepEqual(starter.allowedMentions,{parse:[],roles:[r],users:[]});assert.match(starter.content,new RegExp(r));
+    const th=discord.all.first();
+    assert.equal(th.name,'Ryder · Pending');assert.equal(th.type,ChannelType.PrivateThread);assert.ok(th.members.has('player'));
+    const starter=th.first;
+    assert.deepEqual(starter.allowedMentions,{parse:[],roles:[r],users:['player']});assert.match(starter.content,new RegExp(r));assert.match(starter.content,/<@player>, this private thread/);
     assert.match(starter.embeds[0].description,/Pending review/);assert.equal(starter.embeds[0].fields.length,4);
     await posts.sync('player','Ryder');assert.equal(discord.creates,1);assert.equal(discord.pings,0);
     discord.all.first().name='Ryder [legacy-review-id]';
     await db.query('UPDATE ledger_test_review_posts SET presentation_version=0');
-    await posts.retryPending();assert.equal(discord.all.first().name,'Ryder');assert.equal(discord.pings,0);
+    await posts.retryPending();assert.equal(discord.all.first().name,'Ryder · Pending');assert.equal(discord.pings,0);
     await ledger.characters.submit(g,'player',{...input,set:3});
     await posts.sync('player','Ryder');assert.equal(discord.creates,1);assert.equal(discord.pings,1);
     await posts.sync('player','Ryder');assert.equal(discord.pings,1);
@@ -50,12 +56,17 @@ test('public review creates once, mentions only moderators, updates resubmission
     const decision={guildId:g,playerId:'player',name:'Ryder',moderatorId:'mod',requestId:'approved',decision:'approved',note:'Reviewed all requirements'};
     await assert.rejects(ledger.characters.decide({...decision,expectedRevision:1}),/changed after/);
     await ledger.characters.decide({...decision,expectedRevision:c.revision});
-    await posts.sync('player','Ryder');assert.match(starter.embeds[0].description,/Approved/);
+    await posts.sync('player','Ryder');assert.match(starter.embeds[0].description,/Approved/);assert.equal(th.name,'Ryder · Approved');
     assert.deepEqual(starter.allowedMentions,{parse:[]});assert.equal(starter.components[0].toJSON().components[0].disabled,true);
     // Recover a post whose creation succeeded before its mapping was committed.
     await db.query('DELETE FROM ledger_test_review_posts');
     await posts.sync('player','Ryder');assert.equal(discord.creates,1);
     assert.equal((await db.query('SELECT needs_publish FROM ledger_test_characters')).rows[0].needs_publish,false);
+    // A review that still points at an old forum post gets a new private thread.
+    await db.query("UPDATE ledger_test_review_posts SET thread_id='old-forum-post'");
+    discord.all.clear();discord.all.set('old-forum-post',{id:'old-forum-post',parentId:'old-forum',ownerId:'bot'});
+    await posts.sync('player','Ryder');assert.equal(discord.creates,2);
+    assert.equal((await db.query('SELECT thread_id FROM ledger_test_review_posts')).rows[0].thread_id===`old-forum-post`,false);
   }finally{await db.close();}
 });
 test('Discord publish failure preserves the saved submission for retry',async()=>{
@@ -95,14 +106,14 @@ test('request changes never approves; owner resubmission re-enables staff approv
     await reviewInteraction(make(`char-decision:rejected:${key}:1`),ledger,g);
     c=await ledger.characters.review(g,'player','Ryder');assert.equal(c.status,'rejected');assert.equal(c.approved_at,null);
     assert.equal((await ledger.characters.slots(g,'player')).approved,0);
-    let starter=await discord.all.first().fetchStarterMessage();assert.match(starter.embeds[0].description,/Changes requested/);assert.doesNotMatch(starter.embeds[0].description,/Status: Approved/);
+    let starter=discord.all.first().first;assert.match(starter.embeds[0].description,/Changes requested/);assert.doesNotMatch(starter.embeds[0].description,/Status: Approved/);
     let buttons=starter.components[0].toJSON().components;assert.equal(buttons[0].disabled,true);assert.equal(buttons[2].disabled,false);
     await reviewInteraction(make(`char-resubmit:${key}:1`,'someone-else',false),ledger,g);
     assert.equal((await ledger.characters.review(g,'player','Ryder')).status,'rejected');
     await reviewInteraction(make(`char-resubmit:${key}:1`,'player',false),ledger,g);
     c=await ledger.characters.review(g,'player','Ryder');assert.equal(c.status,'pending');assert.equal(c.revision,2);
     assert.equal(discord.creates,1);assert.equal(discord.pings,1);
-    starter=await discord.all.first().fetchStarterMessage();buttons=starter.components[0].toJSON().components;
+    starter=discord.all.first().first;buttons=starter.components[0].toJSON().components;
     assert.match(starter.embeds[0].description,/Pending review/);assert.equal(buttons[0].disabled,false);assert.equal(buttons[2].disabled,true);
     await reviewInteraction(make(`char-decision:approved:${key}:2`),ledger,g);
     assert.equal((await ledger.characters.review(g,'player','Ryder')).status,'approved');
@@ -114,9 +125,9 @@ test('request changes never approves; owner resubmission re-enables staff approv
   }finally{await db.close();}
 });
 
-test('missing forum permissions are named before posting',async()=>{
-  const { missingForumPermissions } = await import('../src/review-posts.js');
-  const forum={permissionsFor:()=>({has:p=>!['ReadMessageHistory','ManageThreads'].includes(p)})};
-  assert.deepEqual(missingForumPermissions(forum,{}),['ReadMessageHistory','ManageThreads']);
-  assert.deepEqual(missingForumPermissions({permissionsFor:()=>null},{}).length,6);
+test('missing review-channel permissions are named before posting',async()=>{
+  const { missingReviewPermissions } = await import('../src/review-posts.js');
+  const channel={permissionsFor:()=>({has:p=>!['CreatePrivateThreads','ManageThreads'].includes(p)})};
+  assert.deepEqual(missingReviewPermissions(channel,{}),['CreatePrivateThreads','ManageThreads']);
+  assert.deepEqual(missingReviewPermissions({permissionsFor:()=>null},{}).length,6);
 });

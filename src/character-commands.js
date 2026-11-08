@@ -62,8 +62,8 @@ export async function handleCharacterCommand(interaction,ledger,guildId){
       });
       let publication;
       try{publication=ledger.reviewPosts?await ledger.reviewPosts.sync(playerId,c.name):'Public review posting isn\u2019t set up yet. Ask an administrator.';}
-      catch(error){publication=`Saved, but the review post couldn\u2019t be confirmed. It\u2019s queued for retry. ${error instanceof UserError?error.message:'Check bot permissions in the characters forum.'}`;}
-      return message(card({title:`📥 Submitted: ${clean(c.name)}`,description:'Your character is waiting for staff review. This isn\u2019t an approval or an Avrae import yet.',tone:'pending',fields:[{name:'Status',value:'Pending review',inline:true},{name:'Review post',value:publication}]}));
+      catch(error){publication=`Saved, but the review post couldn\u2019t be confirmed. It\u2019s queued for retry. ${error instanceof UserError?error.message:'Check bot permissions in the review channel.'}`;}
+      return message(card({title:`📥 Submitted: ${clean(c.name)}`,description:'Your character is waiting for staff review. This isn\u2019t an approval or an Avrae import yet.',tone:'pending',fields:[{name:'Status',value:'Pending review',inline:true},{name:'Your review thread',value:`${publication}\nOnly you and staff can see it. Updates and questions happen there.`}]}));
     }
     if(sub==='publish'){
       if(!ledger.reviewPosts)throw new UserError('Public review posting is not configured.');
