@@ -12,7 +12,9 @@ import { card } from '../src/ui.js';
 const G='1566203164464513104';
 const msg=(channelId,parentId,grand)=>({guildId:G,channelId,channel:{parentId,parent:grand?{parentId:grand}:null}});
 test('live AP counts every in-character channel and forum thread, never OOC, setup or staff spaces',()=>{
-  const cfg=liveConfig({LEDGER_LIVE:'true'});assert.equal(cfg.live,true);
+  // Excluded spaces come from AP_EXCLUDED_IDS (set in Vercel); these sample IDs stand in for
+  // a START HERE category, a staff category, an OOC channel and a help forum.
+  const cfg=liveConfig({LEDGER_LIVE:'true',AP_EXCLUDED_IDS:'1566204441198203080,1566206327448010752,1566205089633534093,1566463751274758184'});assert.equal(cfg.live,true);
   assert.equal(earnsWritingAP(msg('1566205495742570686','1566205219333869679'),cfg,G),true); // lantern-and-line
   assert.equal(earnsWritingAP(msg('9999999999999999999','1566205535521480784','1566205219333869679'),cfg,G),true); // around-wickhaven thread
   assert.equal(earnsWritingAP(msg('8888888888888888888','1566217673057108048','1566217443041353890'),cfg,G),true); // behind-closed-doors thread

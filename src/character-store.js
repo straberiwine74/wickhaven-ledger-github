@@ -35,8 +35,15 @@ export const characterSchema = [
     WHERE r.decision='rejected' AND c.status='rejected' AND NOT EXISTS (
       SELECT 1 FROM ledger_test_character_reviews newer WHERE newer.guild_id=r.guild_id AND newer.player_id=r.player_id AND newer.name_key=r.name_key
       AND (newer.created_at>r.created_at OR (newer.created_at=r.created_at AND newer.request_id>r.request_id)))
-    ON CONFLICT DO NOTHING`
+    ON CONFLICT DO NOTHING`,
+  // Retirement: a retired or deceased character keeps its record but no longer uses a slot.
+  `ALTER TABLE ledger_test_characters DROP CONSTRAINT IF EXISTS ledger_test_characters_status_check`,
+  `ALTER TABLE ledger_test_characters ADD CONSTRAINT ledger_test_characters_status_check CHECK (status IN ('pending','approved','rejected','retired'))`,
+  `ALTER TABLE ledger_test_characters ADD COLUMN IF NOT EXISTS retired_at timestamptz`,
+  `ALTER TABLE ledger_test_characters ADD COLUMN IF NOT EXISTS fate text`,
+  `ALTER TABLE ledger_test_characters ADD COLUMN IF NOT EXISTS retire_reason text`
 ];
+export const RETIRE_MIN_DAYS=14;
 
 async function accountLock(db,guildId,playerId) {
   await db.query('INSERT INTO ledger_test_character_accounts (guild_id,player_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',[guildId,playerId]);
@@ -58,7 +65,8 @@ export class CharacterStore {
       await db.query('BEGIN');
       await accountLock(db,guildId,playerId);
       const prior=(await db.query('SELECT status FROM ledger_test_characters WHERE guild_id=$1 AND player_id=$2 AND name_key=$3',[guildId,playerId,c.nameKey])).rows[0];
-      if (prior?.status==='approved') throw new UserError('That character is already approved. Ask staff about changes to an approved submission.');
+      if (prior?.status==='approved') throw new UserError('That character is already approved. Use `/ledger-character respec` to request changes.');
+      if (prior?.status==='retired') throw new UserError('That character is retired. Ask staff if you want to bring them back.');
       await db.query(`INSERT INTO ledger_test_characters (guild_id,player_id,name_key,name,sheet_id,sheet_url,stats_url,sample_url,stat_set,resources)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (guild_id,player_id,name_key)
         DO UPDATE SET name=EXCLUDED.name,sheet_id=EXCLUDED.sheet_id,sheet_url=EXCLUDED.sheet_url,stats_url=EXCLUDED.stats_url,sample_url=EXCLUDED.sample_url,stat_set=EXCLUDED.stat_set,resources=EXCLUDED.resources,status='pending',submitted_at=now(),revision=ledger_test_characters.revision+1,needs_publish=true`,
@@ -88,6 +96,29 @@ export class CharacterStore {
       if(expectedRevision!==undefined&&c.revision!==expectedRevision)throw new UserError('This review changed. Refresh the review post before resubmitting.');
       await db.query("UPDATE ledger_test_characters SET status='pending',approved_at=NULL,revision=revision+1,needs_publish=true,submitted_at=now() WHERE guild_id=$1 AND player_id=$2 AND name_key=$3",[guildId,playerId,c.name_key]);
       await db.query('COMMIT');return {name:c.name,revision:c.revision+1};
+    }catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}
+  }
+  // Player retires their own approved character. Retired needs 14 days since approval;
+  // a death in play (deceased) can be recorded any time. Frees the character slot.
+  async retire(guildId,playerId,name,{fate='retired',reason='',now=new Date()}={}) {
+    if(!['retired','deceased'].includes(fate)) throw new UserError('Choose Retired or Deceased.');
+    reason=String(reason??'').trim();
+    if(reason.length>300) throw new UserError('Keep the note under 300 characters.');
+    const db=await this.pool.connect();
+    try{
+      await db.query('BEGIN');await accountLock(db,guildId,playerId);
+      const c=(await db.query('SELECT * FROM ledger_test_characters WHERE guild_id=$1 AND player_id=$2 AND name_key=$3 FOR UPDATE',[guildId,playerId,name.trim().toLowerCase()])).rows[0];
+      if(!c) throw new UserError('No character with that name belongs to your account. Check `/ledger-character list`.');
+      if(c.status==='retired') throw new UserError(`${c.name} is already retired.`);
+      if(c.status!=='approved') throw new UserError('Only approved characters can be retired. A pending submission can simply be left unsubmitted.');
+      const days=(now-new Date(c.approved_at))/86400000;
+      if(fate==='retired'&&days<RETIRE_MIN_DAYS){
+        const left=Math.ceil(RETIRE_MIN_DAYS-days);
+        throw new UserError(`Characters need two weeks of play before retiring. ${c.name} can retire in ${left} day${left===1?'':'s'}. If they died in play, choose Deceased instead.`);
+      }
+      await db.query("UPDATE ledger_test_characters SET status='retired',retired_at=$4,fate=$5,retire_reason=$6 WHERE guild_id=$1 AND player_id=$2 AND name_key=$3",[guildId,playerId,c.name_key,now,fate,reason||null]);
+      await db.query('COMMIT');
+      return {name:c.name,fate,reason,sheet:c.sheet_url,approvedAt:c.approved_at,days:Math.floor(days)};
     }catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}
   }
   async slots(guildId,playerId,now=new Date()) {

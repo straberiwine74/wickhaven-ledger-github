@@ -15,7 +15,7 @@ async function findReviewThread(threads,c,key,botId){
 }
 export function reviewPayload(c,roleId,note=''){
   const key=reviewKey(c);
-  const status={pending:'Pending review',approved:'Approved',rejected:'Changes requested'}[c.status];
+  const status={pending:'Pending review',approved:'Approved',rejected:'Changes requested',retired:'Retired'}[c.status];
   const fields=[
     {name:'Character sheet',value:c.sheet_url},
     {name:`Ability scores — chosen set ${c.stat_set}`,value:c.stats_url},
@@ -24,10 +24,10 @@ export function reviewPayload(c,roleId,note=''){
   if(note)fields.push({name:c.status==='rejected'?'✏️ Changes requested by staff':'Staff review note',value:note});
   if(c.status==='rejected')fields.push({name:'Player next step',value:'Update your character, then click **Resubmit Changes**. The review returns to Pending and Moderators are alerted. If your links or options changed, use `/ledger-character submit` again.'});
   // Keep "Review <key> • Revision <n>" at the end of the footer: post lookup depends on it.
-  const embed=card({title:`🧙 Character review: ${c.name}`,description:`**Status: ${status}**\nPlayer: <@${c.player_id}>${testNote('\n*TEST system: not a live approval.*')}`,tone:{pending:'pending',approved:'success',rejected:'warning'}[c.status],fields,footer:`Review ${key} • Revision ${c.revision}`});
+  const embed=card({title:`🧙 Character review: ${c.name}`,description:`**Status: ${status}**\nPlayer: <@${c.player_id}>${testNote('\n*TEST system: not a live approval.*')}`,tone:{pending:'pending',approved:'success',rejected:'warning',retired:'neutral'}[c.status],fields,footer:`Review ${key} • Revision ${c.revision}`});
   const row=new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`char-review:approved:${key}:${c.revision}`).setLabel('Approve').setStyle(ButtonStyle.Success).setDisabled(c.status!=='pending'),
-    new ButtonBuilder().setCustomId(`char-review:rejected:${key}:${c.revision}`).setLabel('Request Changes').setStyle(ButtonStyle.Secondary).setDisabled(c.status==='rejected'),
+    new ButtonBuilder().setCustomId(`char-review:rejected:${key}:${c.revision}`).setLabel('Request Changes').setStyle(ButtonStyle.Secondary).setDisabled(c.status==='rejected'||c.status==='retired'),
     new ButtonBuilder().setCustomId(`char-resubmit:${key}:${c.revision}`).setLabel('Resubmit Changes').setStyle(ButtonStyle.Primary).setDisabled(c.status!=='rejected'));
   return {content:c.status==='pending'?`<@&${roleId}> — a character is ready for review.`:'Character review completed.',embeds:[embed],components:[row],allowedMentions:{parse:[],roles:c.status==='pending'?[roleId]:[],users:[]}};
 }

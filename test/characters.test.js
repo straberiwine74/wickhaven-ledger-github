@@ -87,3 +87,39 @@ test('database enforces pending review, two initial slots, timed unlocks, and re
     assert.equal(count,5);
   }finally{await db.close();}
 });
+
+test('players retire their own approved characters: two weeks for Retired, any time for Deceased, slot freed',async()=>{
+  const db=new PGlite();
+  const pool={query:db.query.bind(db),connect:async()=>({query:db.query.bind(db),release(){}})};
+  const ledger=new TestLedger(pool);
+  const day=n=>new Date(Date.UTC(2026,10,1+n,12));
+  try{
+    await ledger.init();
+    await ledger.characters.submit(guild,'p',input('Lyra',501));
+    await ledger.characters.submit(guild,'p',input('Bram',502));
+    await ledger.characters.submit(guild,'p',input('Cass',503));
+    for(const [i,n] of ['Lyra','Bram'].entries())await ledger.characters.decide({guildId:guild,playerId:'p',name:n,moderatorId:'mod',requestId:'r'+i,decision:'approved',note:'Reviewed creation requirements',now:day(0)});
+    await assert.rejects(ledger.characters.retire(guild,'p','Lyra',{now:day(13)}),/two weeks.*in 1 day/);
+    await assert.rejects(ledger.characters.retire(guild,'p','Cass',{now:day(20)}),/Only approved/);
+    await assert.rejects(ledger.characters.retire(guild,'other','Lyra',{now:day(20)}),/No character/);
+    const r=await ledger.characters.retire(guild,'p','Bram',{fate:'deceased',reason:'Fell at the Blood Pit',now:day(3)});
+    assert.equal(r.fate,'deceased');assert.equal(r.days,3);
+    assert.equal((await ledger.characters.slots(guild,'p',day(3))).approved,1);
+    await ledger.characters.retire(guild,'p','Lyra',{now:day(14)});
+    assert.equal((await ledger.characters.slots(guild,'p',day(14))).approved,0);
+    await assert.rejects(ledger.characters.retire(guild,'p','Lyra',{now:day(15)}),/already retired/);
+    await assert.rejects(ledger.characters.submit(guild,'p',input('Lyra',501)),/retired/);
+    await assert.rejects(ledger.characters.decide({guildId:guild,playerId:'p',name:'Lyra',moderatorId:'mod',requestId:'r9',decision:'rejected',note:'Reviewed creation requirements'}),/already retired/);
+    assert.equal((await ledger.characters.list(guild,'p')).find(c=>c.name==='Lyra').status,'retired');
+  }finally{await db.close();}
+});
+
+test('retire command requires confirmation and posts a staff notice with the directory to-do',async()=>{
+  const { retireNotice } = await import('../src/character-commands.js');
+  const retire=characterCommands.find(c=>c.name==='ledger-character').options.find(o=>o.name==='retire');
+  assert.deepEqual(retire.options.map(o=>o.name),['name','fate','confirm','note']);
+  const opts={getSubcommand:()=>'retire',getBoolean:()=>false,getString:()=> 'Lyra'};
+  await assert.rejects(handleCharacterCommand({commandName:'ledger-character',user:{id:'p'},options:opts},{characters:{}},guild),/Set confirm to True/);
+  const text=JSON.stringify(retireNotice({name:'Lyra',fate:'retired',reason:'Sailed north',sheet:'https://www.dndbeyond.com/characters/501',days:20},'p'));
+  for(const s of ['Lyra','Retired','Sailed north','<@p>','directory'])assert.ok(text.includes(s),s);
+});

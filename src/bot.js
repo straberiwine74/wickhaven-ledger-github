@@ -79,6 +79,7 @@ async function report(payload) {
   const channel = await client.channels.fetch(target);
   if (channel?.isTextBased()) await channel.send(typeof payload === 'string' ? notice(null, payload, 'neutral') : payload);
 }
+if (ledger) ledger.staffNotice = async payload => { if (!(live.live ? live.log : TEST_CHANNEL_ID)) throw new Error('No staff channel configured.'); await report(payload); };
 client.once(Events.ClientReady, async () => {
   console.log(`Ledger connected. Mode: ${live.live ? 'LIVE' : savedTestMode ? 'saved TEST AP' : 'ownership test'}.`);
   try {

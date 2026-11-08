@@ -1,8 +1,8 @@
 import { UserError, staffAllowed } from './admin.js';
 import { notifyChanges } from './character-notifications.js';
 import { card, message, clean, testNote } from './ui.js';
-const statusName={pending:'Pending review',approved:'Approved',rejected:'Changes requested'};
-const statusTone={pending:'pending',approved:'success',rejected:'warning'};
+const statusName={pending:'Pending review',approved:'Approved',rejected:'Changes requested',retired:'Retired'};
+const statusTone={pending:'pending',approved:'success',rejected:'warning',retired:'neutral'};
 const str=(name,description,max_length=80)=>({type:3,name,description,required:true,max_length});
 const target={type:6,name:'player',description:'Submitting player',required:true};
 export const characterCommands=[
@@ -16,13 +16,26 @@ export const characterCommands=[
     {type:1,name:'list',description:'View your submitted characters'},
     {type:1,name:'publish',description:'Publish or repair your saved review post',options:[str('name','Submitted character name')]},
     {type:1,name:'resubmit',description:'Return a corrected character to pending review',options:[str('name','Submitted character name')]},
-    {type:1,name:'slots',description:'View your character slots and unlock progress'}
+    {type:1,name:'slots',description:'View your character slots and unlock progress'},
+    {type:1,name:'retire',description:'Retire one of your approved characters and free its slot',options:[
+      str('name','Approved character name'),
+      {type:3,name:'fate',description:'Retired (after two weeks of play) or Deceased (died in play)',required:true,choices:[{name:'Retired',value:'retired'},{name:'Deceased',value:'deceased'}]},
+      {type:5,name:'confirm',description:'Confirm: this can\u2019t be undone without staff help',required:true},
+      {type:3,name:'note',description:'Optional: how they leave the story (shared with staff)',required:false,max_length:300}
+    ]}
   ]},
   {name:'ledger-review',description:'Staff: inspect a character submission',default_member_permissions:'0',options:[target,str('name','Submitted character name')]},
   {name:'ledger-approve',description:'Staff: approve a reviewed submission',default_member_permissions:'0',options:[target,str('name','Submitted character name'),
     {type:5,name:'verified',description:'Confirm you manually checked the sheet, rolls and creation rules',required:true},str('note','Review note; do not include sensitive RP text',300)]},
   {name:'ledger-reject',description:'Staff: return a pending submission for corrections',default_member_permissions:'0',options:[target,str('name','Submitted character name'),str('reason','What needs correcting; do not include sensitive RP text',300)]}
 ];
+export function retireNotice(r,playerId){
+  const label=r.fate==='deceased'?'Deceased':'Retired';
+  const fields=[{name:'Player',value:`<@${playerId}>`,inline:true},{name:'Fate',value:label,inline:true},{name:'Played',value:`${r.days} day${r.days===1?'':'s'} since approval`,inline:true},{name:'Character sheet',value:r.sheet}];
+  if(r.reason)fields.push({name:'Player\u2019s note',value:clean(r.reason)});
+  fields.push({name:'Staff to-do',value:`In the character directory, change ${clean(r.name)}\u2019s tag from **Active** to **${label}**.`});
+  return message(card({title:`${r.fate==='deceased'?'🪦':'🌅'} Character ${label.toLowerCase()}: ${clean(r.name)}`,description:'The Ledger freed this character\u2019s slot.',tone:'neutral',fields}));
+}
 function formatSlots(s){
   const first=s.firstApproval?new Date(s.firstApproval).toISOString().slice(0,10):'Not yet approved';
   const fields=[
@@ -62,6 +75,14 @@ export async function handleCharacterCommand(interaction,ledger,guildId){
       return message(card({title:`🔁 Resubmitted: ${clean(c.name)}`,description:'Your character is back in the review queue, and staff have been alerted.',tone:'pending',fields:[{name:'Status',value:'Pending review',inline:true},{name:'Review post',value:notice},{name:'Good to know',value:'This reuses your saved links and resource choice. Use `/ledger-character submit` again if those changed.'}]}));
     }
     if(sub==='slots')return formatSlots(await store.slots(guildId,playerId));
+    if(sub==='retire'){
+      if(!interaction.options.getBoolean('confirm',true))throw new UserError('Set confirm to True to retire this character. Nothing was changed.');
+      const r=await store.retire(guildId,playerId,interaction.options.getString('name',true),{fate:interaction.options.getString('fate',true),reason:interaction.options.getString('note')??''});
+      const label=r.fate==='deceased'?'Deceased':'Retired';
+      let staff='Staff notices aren\u2019t set up. Let a Moderator know.';
+      if(ledger.staffNotice)try{await ledger.staffNotice(retireNotice(r,playerId));staff='Staff have been notified and will update your character in the directory.';}catch{staff='Saved, but the staff notice couldn\u2019t be posted. Let a Moderator know.';}
+      return message(card({title:`${r.fate==='deceased'?'🪦':'🌅'} ${label}: ${clean(r.name)}`,description:'Their record is kept, and their character slot is free again.',tone:'neutral',fields:[{name:'Staff',value:staff},{name:'Good to know',value:'Ask staff if you ever want to bring them back.'}]}));
+    }
     const rows=await store.list(guildId,playerId);
     return message(card({title:'🧙 Your characters',description:rows.length?(testNote('*TEST submissions*')||`${rows.length} submitted`):'No submissions yet. Use `/ledger-character submit` to send one in.',tone:'info',
       fields:rows.slice(0,25).map(r=>({name:clean(r.name),value:`**${statusName[r.status]}**${r.status==='rejected'&&r.review_note?'\nChanges requested: '+clean(r.review_note):''}`,inline:r.status!=='rejected'}))}));
