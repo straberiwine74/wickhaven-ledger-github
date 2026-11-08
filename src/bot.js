@@ -7,6 +7,7 @@ import { commands, handleCommand } from './commands.js';
 import { UserError } from './admin.js';
 import { ReviewPosts, missingReviewPermissions } from './review-posts.js';
 import { reviewInteraction } from './review-interactions.js';
+import { Respecs, respecInteraction } from './respecs.js';
 import { CharacterNotifications } from './character-notifications.js';
 import { installQuests } from './quest-discord.js';
 import { QuestFeedback, questFeedbackCommand } from './quest-feedback.js';
@@ -44,6 +45,8 @@ if (process.env.QUEST_TEST_ENABLED === 'true' || live.live) {
 }
 if(ledger&&process.env.CHARACTERS_CHANNEL_ID&&process.env.MODERATOR_ROLE_IDS){
   ledger.reviewPosts=new ReviewPosts(pool,client,DISCORD_GUILD_ID,process.env.CHARACTERS_CHANNEL_ID,process.env.MODERATOR_ROLE_IDS.split(',')[0].trim());
+  ledger.respecs=new Respecs(pool,client,{guildId:DISCORD_GUILD_ID,channelId:process.env.CHARACTERS_CHANNEL_ID,roleId:process.env.MODERATOR_ROLE_IDS.split(',')[0].trim()});
+  try{await ledger.respecs.init();}catch{console.error('Respec requests could not initialize; /ledger-character respec is off.');ledger.respecs=null;}
 }
 if(ledger)ledger.notifications=new CharacterNotifications(pool,client,DISCORD_GUILD_ID);
 let publishing=false;
@@ -121,6 +124,7 @@ client.on(Events.InteractionCreate, async interaction => {
     return;
   }
   if(interaction.isButton()||interaction.isModalSubmit()){
+    if(await respecInteraction(interaction,ledger,DISCORD_GUILD_ID))return;
     await reviewInteraction(interaction,ledger,DISCORD_GUILD_ID);return;
   }
   if (!interaction.isChatInputCommand() || !commands.some(c => c.name === interaction.commandName)) return;

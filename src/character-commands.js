@@ -18,6 +18,10 @@ export const characterCommands=[
     {type:1,name:'publish',description:'Publish or repair your saved review post',options:[str('name','Submitted character name')]},
     {type:1,name:'resubmit',description:'Return a corrected character to pending review',options:[str('name','Submitted character name')]},
     {type:1,name:'slots',description:'View your character slots and unlock progress'},
+    {type:1,name:'respec',description:'Ask staff to change parts of an approved character',options:[
+      str('name','Approved character name'),
+      {type:3,name:'changes',description:'What you want to change and why',required:true,min_length:10,max_length:1000}
+    ]},
     {type:1,name:'retire',description:'Retire one of your approved characters and free its slot',options:[
       str('name','Approved character name'),
       {type:3,name:'fate',description:'Retired (after two weeks of play) or Deceased (died in play)',required:true,choices:[{name:'Retired',value:'retired'},{name:'Deceased',value:'deceased'}]},
@@ -76,6 +80,13 @@ export async function handleCharacterCommand(interaction,ledger,guildId){
       return message(card({title:`🔁 Resubmitted: ${clean(c.name)}`,description:'Your character is back in the review queue, and staff have been alerted.',tone:'pending',fields:[{name:'Status',value:'Pending review',inline:true},{name:'Review post',value:notice},{name:'Good to know',value:'This reuses your saved links and resource choice. Use `/ledger-character submit` again if those changed.'}]}));
     }
     if(sub==='slots')return formatSlots(await store.slots(guildId,playerId));
+    if(sub==='respec'){
+      if(!ledger.respecs)throw new UserError('Respecs aren\u2019t set up yet. Ask an administrator.');
+      const r=await ledger.respecs.store.request(guildId,playerId,interaction.options.getString('name',true),interaction.options.getString('changes',true),interaction.id);
+      let link;
+      try{link=await ledger.respecs.publish(r,r.updated?'pending':null);}catch(e){link=`Saved, but the review thread couldn\u2019t be created. ${e instanceof UserError?e.message:'Let a Moderator know.'}`;}
+      return message(card({title:`🔁 Respec ${r.updated?'updated':'requested'}: ${clean(r.name)}`,description:'Staff will review it in your private thread. Only you and staff can see it.',tone:'pending',fields:[{name:'Your respec thread',value:link},{name:'Good to know',value:'Keep playing your character as-is until the respec is approved.'}]}));
+    }
     if(sub==='retire'){
       if(!interaction.options.getBoolean('confirm',true))throw new UserError('Set confirm to True to retire this character. Nothing was changed.');
       const r=await store.retire(guildId,playerId,interaction.options.getString('name',true),{fate:interaction.options.getString('fate',true),reason:interaction.options.getString('note')??''});
