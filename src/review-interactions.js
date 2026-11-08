@@ -1,6 +1,7 @@
 import { ActionRowBuilder,ModalBuilder,TextInputBuilder,TextInputStyle,MessageFlags } from 'discord.js';
 import { UserError } from './admin.js';
 import { notifyChanges } from './character-notifications.js';
+import { promoteApplicant } from './roles.js';
 import { card, message, notice, clean } from './ui.js';
 
 export function canReview(interaction){
@@ -46,6 +47,7 @@ export async function reviewInteraction(interaction,ledger,guildId){
       const result=await ledger.characters.decide({guildId,playerId:c.player_id,name:c.name,moderatorId:interaction.user.id,requestId:interaction.id,decision,note:interaction.fields.getTextInputValue('note'),expectedRevision:revision});
       let notice='';
       try{await ledger.reviewPosts.sync(c.player_id,c.name);}catch{notice=' The decision was saved, but the public post update is queued for retry.';}
+      if(decision==='approved'&&!result.duplicate){const promoted=await promoteApplicant({client:interaction.client,pool:ledger.characters.pool,guildId,playerId:c.player_id,nameKey:c.name_key});notice+=promoted==='promoted'?' Adventurer role granted.':promoted==='left'?' The player has left the server, so no roles were changed.':' The role change failed; see the note in the review post.';}
       if(decision==='rejected')notice+=' '+await notifyChanges(ledger,interaction.id);
       await interaction.editReply(message(card({title:result.duplicate?'Review already recorded':decision==='approved'?`✅ Approved: ${clean(c.name)}`:`✏️ Returned for changes: ${clean(c.name)}`,description:(notice.trim()||'The review post has been updated.'),tone:result.duplicate?'neutral':decision==='approved'?'success':'warning'})));return true;
     }
