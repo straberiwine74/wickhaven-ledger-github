@@ -13,6 +13,12 @@ async function findReviewThread(threads,c,key,botId){
     if(starter?.author.id===botId&&(starter.embeds[0]?.footer?.text??'').includes(`Review ${key} •`))return thread;
   }
 }
+// Everything the Ledger needs in the review forum to create, update and reopen posts.
+export const FORUM_PERMISSIONS=['ViewChannel','SendMessages','SendMessagesInThreads','ReadMessageHistory','EmbedLinks','ManageThreads'];
+export function missingForumPermissions(forum,user){
+  const perms=forum.permissionsFor(user);
+  return FORUM_PERMISSIONS.filter(p=>!perms?.has(p));
+}
 export function reviewPayload(c,roleId,note=''){
   const key=reviewKey(c);
   const status={pending:'Pending review',approved:'Approved',rejected:'Changes requested',retired:'Retired'}[c.status];
@@ -46,8 +52,12 @@ export class ReviewPosts{
       await db.query('BEGIN');
       const c=(await db.query('SELECT * FROM ledger_test_characters WHERE guild_id=$1 AND player_id=$2 AND name_key=$3 FOR UPDATE',[this.guildId,playerId,name.trim().toLowerCase()])).rows[0];
       if(!c)throw new UserError('Submission not found.');
-      const forum=await this.client.channels.fetch(this.forumId);
+      let forum;
+      try{forum=await this.client.channels.fetch(this.forumId);}
+      catch(e){if(e.code===50001||e.code===10003)throw new UserError(`The Ledger can\u2019t see channel ${this.forumId} (Discord ${e.code}). Check CHARACTERS_CHANNEL_ID and give the Ledger View Channel there.`);throw e;}
       if(forum?.type!==ChannelType.GuildForum||forum.guildId!==this.guildId)throw new UserError('The configured characters channel must be a forum in this server.');
+      const missing=missingForumPermissions(forum,this.client.user);
+      if(missing.length)throw new UserError(`The Ledger is missing ${missing.join(', ')} in #${forum.name}.`);
       const role=await forum.guild.roles.fetch(this.roleId);
       if(!role)throw new UserError(`Moderator role ${this.roleId} isn\u2019t a role in this server. Check the first ID in MODERATOR_ROLE_IDS in Vercel, then redeploy.`);
       if(c.status==='pending'&&!role.mentionable&&!forum.permissionsFor(this.client.user)?.has('MentionEveryone'))throw new UserError('The Moderator role cannot be notified. Allow Ledger Mention @everyone, @here, and All Roles in the characters forum, or make that role mentionable.');

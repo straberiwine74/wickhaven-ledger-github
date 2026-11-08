@@ -12,7 +12,7 @@ const input={name:'Ryder',sheet:'https://www.dndbeyond.com/characters/123',stats
 function transport(){
   const all=new Collection();let creates=0,pings=0;let fail=false;
   const normalize=p=>({...p,embeds:(p.embeds??[]).map(e=>e.toJSON?e.toJSON():e)});
-  const forum={id:f,guildId:g,type:ChannelType.GuildForum,availableTags:[],flags:{bitfield:0},guild:{roles:{fetch:async()=>({mentionable:true})}}};
+  const forum={id:f,name:'character-approval',guildId:g,type:ChannelType.GuildForum,availableTags:[],flags:{bitfield:0},permissionsFor:()=>({has:()=>true}),guild:{roles:{fetch:async()=>({mentionable:true})}}};
   forum.threads={fetchActive:async()=>({threads:all}),fetchArchived:async()=>({threads:new Collection(),hasMore:false}),create:async data=>{
     if(fail)throw new Error('Simulated missing Send Messages permission');
     creates++;
@@ -112,4 +112,11 @@ test('request changes never approves; owner resubmission re-enables staff approv
     assert.equal((await ledger.characters.review(g,'player','Ryder')).status,'rejected');
     assert.equal((await ledger.characters.slots(g,'player')).approved,0);
   }finally{await db.close();}
+});
+
+test('missing forum permissions are named before posting',async()=>{
+  const { missingForumPermissions } = await import('../src/review-posts.js');
+  const forum={permissionsFor:()=>({has:p=>!['ReadMessageHistory','ManageThreads'].includes(p)})};
+  assert.deepEqual(missingForumPermissions(forum,{}),['ReadMessageHistory','ManageThreads']);
+  assert.deepEqual(missingForumPermissions({permissionsFor:()=>null},{}).length,6);
 });

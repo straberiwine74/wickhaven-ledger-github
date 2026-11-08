@@ -5,7 +5,7 @@ import { countWords } from './activity.js';
 import { ProxyTracker } from './proxy.js';
 import { commands, handleCommand } from './commands.js';
 import { UserError } from './admin.js';
-import { ReviewPosts } from './review-posts.js';
+import { ReviewPosts, missingForumPermissions } from './review-posts.js';
 import { reviewInteraction } from './review-interactions.js';
 import { CharacterNotifications } from './character-notifications.js';
 import { installQuests } from './quest-discord.js';
@@ -95,6 +95,14 @@ client.once(Events.ClientReady, async () => {
     const modId = (process.env.MODERATOR_ROLE_IDS ?? '').split(',')[0].trim();
     const modRole = /^\d{17,20}$/.test(modId) ? await guild.roles.fetch(modId).catch(() => null) : null;
     console.log(`Moderator role for reviews: ${modRole ? `${modRole.name} (${modId})` : `NOT FOUND (${modId || 'unset'})`}.`);
+    for (const [label, key] of [['Character review forum','CHARACTERS_CHANNEL_ID'],['AP log','AP_LOG_CHANNEL_ID'],['Quest channel','QUEST_CHANNEL_ID'],['Quest test channel','QUEST_TEST_CHANNEL_ID'],['Test channel','TEST_CHANNEL_ID'],['Quest feedback forum','QUEST_FEEDBACK_FORUM_ID'],['Quest feedback log','QUEST_FEEDBACK_LOG_CHANNEL_ID']]) {
+      const id = (process.env[key] ?? '').trim();
+      if (!id) { console.log(`${label}: not set (${key}).`); continue; }
+      const ch = await client.channels.fetch(id).catch(e => ({ error: e.code ?? 'unknown' }));
+      if (!ch || ch.error) { console.log(`${label}: NOT VISIBLE (${id}, Discord ${ch?.error ?? 'unknown'}). Check ${key} and the Ledger's View Channel permission.`); continue; }
+      const extra = key === 'CHARACTERS_CHANNEL_ID' ? missingForumPermissions(ch, client.user) : [];
+      console.log(`${label}: #${ch.name} (${id})${extra.length ? ` MISSING ${extra.join(', ')}` : ''}.`);
+    }
     for (const command of [...commands, ...(questFeedback ? [questFeedbackCommand] : [])]) await guild.commands.create(command);
     await report(live.live ? notice('📒 The Ledger is online', `**Live AP is on.** Tupper posts in in-character channels earn AP for approved players. This channel logs awards and messages held for review.${live.hunting || live.mining ? '' : '\nHunting/mining AP is off: set HUNTING_CHANNEL_ID and MINING_CHANNEL_ID.'}`, 'success') : savedTestMode ? notice('📒 The Ledger is online', 'Matched Tupper messages in this channel earn **TEST** AP. Use `/ledger-ap` to check your balance. Real progression is unaffected.', 'info') : notice('📒 The Ledger is online', 'Ownership test mode. No AP is awarded.', 'neutral'));
   }
