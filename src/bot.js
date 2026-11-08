@@ -92,6 +92,9 @@ client.once(Events.ClientReady, async () => {
   console.log(`Ledger connected. Mode: ${live.live ? 'LIVE' : savedTestMode ? 'saved TEST AP' : 'ownership test'}.`);
   try {
     const guild = await client.guilds.fetch(DISCORD_GUILD_ID);
+    const modId = (process.env.MODERATOR_ROLE_IDS ?? '').split(',')[0].trim();
+    const modRole = /^\d{17,20}$/.test(modId) ? await guild.roles.fetch(modId).catch(() => null) : null;
+    console.log(`Moderator role for reviews: ${modRole ? `${modRole.name} (${modId})` : `NOT FOUND (${modId || 'unset'})`}.`);
     for (const command of [...commands, ...(questFeedback ? [questFeedbackCommand] : [])]) await guild.commands.create(command);
     await report(live.live ? notice('📒 The Ledger is online', `**Live AP is on.** Tupper posts in in-character channels earn AP for approved players. This channel logs awards and messages held for review.${live.hunting || live.mining ? '' : '\nHunting/mining AP is off: set HUNTING_CHANNEL_ID and MINING_CHANNEL_ID.'}`, 'success') : savedTestMode ? notice('📒 The Ledger is online', 'Matched Tupper messages in this channel earn **TEST** AP. Use `/ledger-ap` to check your balance. Real progression is unaffected.', 'info') : notice('📒 The Ledger is online', 'Ownership test mode. No AP is awarded.', 'neutral'));
   }

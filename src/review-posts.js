@@ -49,7 +49,7 @@ export class ReviewPosts{
       const forum=await this.client.channels.fetch(this.forumId);
       if(forum?.type!==ChannelType.GuildForum||forum.guildId!==this.guildId)throw new UserError('The configured characters channel must be a forum in this server.');
       const role=await forum.guild.roles.fetch(this.roleId);
-      if(!role)throw new UserError('Configured moderator role was not found.');
+      if(!role)throw new UserError(`Moderator role ${this.roleId} isn\u2019t a role in this server. Check the first ID in MODERATOR_ROLE_IDS in Vercel, then redeploy.`);
       if(c.status==='pending'&&!role.mentionable&&!forum.permissionsFor(this.client.user)?.has('MentionEveryone'))throw new UserError('The Moderator role cannot be notified. Allow Ledger Mention @everyone, @here, and All Roles in the characters forum, or make that role mentionable.');
       let post=(await db.query('SELECT * FROM ledger_test_review_posts WHERE guild_id=$1 AND player_id=$2 AND name_key=$3',[this.guildId,playerId,c.name_key])).rows[0];
       let thread;
