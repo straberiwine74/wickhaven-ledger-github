@@ -9,6 +9,7 @@ import { ReviewPosts } from './review-posts.js';
 import { reviewInteraction } from './review-interactions.js';
 import { CharacterNotifications } from './character-notifications.js';
 import { installQuests } from './quest-discord.js';
+import { QuestFeedback, questFeedbackCommand } from './quest-feedback.js';
 import { card, message as payload, notice } from './ui.js';
 import { liveConfig, earnsWritingAP, gatheringKind, gatheringCommand, avraeError } from './live.js';
 
@@ -79,12 +80,19 @@ async function report(payload) {
   const channel = await client.channels.fetch(target);
   if (channel?.isTextBased()) await channel.send(typeof payload === 'string' ? notice(null, payload, 'neutral') : payload);
 }
+// /quest feedback: QUEST_FEEDBACK_FORUM_ID (the quest-feedback forum) and
+// QUEST_FEEDBACK_LOG_CHANNEL_ID (staff-only audit channel).
+let questFeedback = null;
+if (pool && /^\d{17,20}$/.test(process.env.QUEST_FEEDBACK_FORUM_ID ?? '')) {
+  questFeedback = new QuestFeedback(pool, client, { guildId: DISCORD_GUILD_ID, forumId: process.env.QUEST_FEEDBACK_FORUM_ID, logId: process.env.QUEST_FEEDBACK_LOG_CHANNEL_ID });
+  try { await questFeedback.init(); } catch { console.error('Quest feedback could not initialize; /quest is off.'); questFeedback = null; }
+}
 if (ledger) ledger.staffNotice = async payload => { if (!(live.live ? live.log : TEST_CHANNEL_ID)) throw new Error('No staff channel configured.'); await report(payload); };
 client.once(Events.ClientReady, async () => {
   console.log(`Ledger connected. Mode: ${live.live ? 'LIVE' : savedTestMode ? 'saved TEST AP' : 'ownership test'}.`);
   try {
     const guild = await client.guilds.fetch(DISCORD_GUILD_ID);
-    for (const command of commands) await guild.commands.create(command);
+    for (const command of [...commands, ...(questFeedback ? [questFeedbackCommand] : [])]) await guild.commands.create(command);
     await report(live.live ? notice('📒 The Ledger is online', `**Live AP is on.** Tupper posts in in-character channels earn AP for approved players. This channel logs awards and messages held for review.${live.hunting || live.mining ? '' : '\nHunting/mining AP is off: set HUNTING_CHANNEL_ID and MINING_CHANNEL_ID.'}`, 'success') : savedTestMode ? notice('📒 The Ledger is online', 'Matched Tupper messages in this channel earn **TEST** AP. Use `/ledger-ap` to check your balance. Real progression is unaffected.', 'info') : notice('📒 The Ledger is online', 'Ownership test mode. No AP is awarded.', 'neutral'));
   }
   catch { console.error('Cannot post startup greeting; check test-channel permissions.'); }
@@ -92,6 +100,15 @@ client.once(Events.ClientReady, async () => {
 });
 client.on(Events.InteractionCreate, async interaction => {
   if(interaction.customId?.startsWith('quest:')) return;
+  if(interaction.isChatInputCommand() && interaction.commandName==='quest'){
+    if(!questFeedback) return void interaction.reply({...notice('Quest feedback is off','Ask an administrator to set it up.','neutral'),flags:MessageFlags.Ephemeral}).catch(()=>{});
+    try{await questFeedback.start(interaction);}catch{console.error('Quest feedback form could not open.');}
+    return;
+  }
+  if(interaction.isModalSubmit() && interaction.customId?.startsWith('qfb:')){
+    if(questFeedback) await questFeedback.submit(interaction);
+    return;
+  }
   if(interaction.isButton()||interaction.isModalSubmit()){
     await reviewInteraction(interaction,ledger,DISCORD_GUILD_ID);return;
   }
