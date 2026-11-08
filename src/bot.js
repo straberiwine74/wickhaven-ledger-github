@@ -124,7 +124,7 @@ client.on(Events.InteractionCreate, async interaction => {
     if (!ledger) return await interaction.editReply(notice('Ledger offline', 'Saved AP testing is turned off right now.', 'neutral'));
     const result = await handleCommand(interaction,ledger,DISCORD_GUILD_ID);
     await interaction.editReply(typeof result === 'string' ? notice(null, result, 'info') : result);
-  } catch (error) { console.error('Ledger command did not complete.'); if (interaction.deferred) await interaction.editReply(notice('Command not confirmed', error instanceof UserError ? error.message : 'The command couldn\u2019t be confirmed. Check your balance or audit history before trying again.')).catch(() => {}); }
+  } catch (error) { console.error(`Ledger command did not complete: /${interaction.commandName} ${error?.code ? `Discord ${error.code} ${error.message}` : (error?.message ?? 'unknown')}`); if (interaction.deferred) await interaction.editReply(notice('Command not confirmed', error instanceof UserError ? error.message : 'The command couldn\u2019t be confirmed. Check your balance or audit history before trying again.')).catch(() => {}); }
 });
 // Gathering: a player's !mine or !hunt end, confirmed by Avrae's next non-error
 // reply in that channel, earns 1 AP per player per day (shared 4 AP cap).

@@ -107,6 +107,6 @@ export class ReviewPosts{
       LEFT JOIN ledger_test_review_posts p USING (guild_id,player_id,name_key)
       WHERE c.guild_id=$1 AND (c.needs_publish=true OR p.presentation_version IS NULL OR p.presentation_version<2)
       ORDER BY c.submitted_at LIMIT 20`,[this.guildId])).rows;
-    for(const c of rows){try{await this.sync(c.player_id,c.name);}catch{console.error('A saved character review could not be published; it remains queued.');}}
+    for(const c of rows){try{await this.sync(c.player_id,c.name);}catch(e){console.error(`A saved character review could not be published; it remains queued. Reason: ${e?.code?`Discord ${e.code} ${e.message}`:(e?.message??'unknown')}`);}}
   }
 }
