@@ -123,3 +123,11 @@ test('retire command requires confirmation and posts a staff notice with the dir
   const text=JSON.stringify(retireNotice({name:'Lyra',fate:'retired',reason:'Sailed north',sheet:'https://www.dndbeyond.com/characters/501',days:20},'p'));
   for(const s of ['Lyra','Retired','Sailed north','<@p>','directory'])assert.ok(text.includes(s),s);
 });
+
+test('submit no longer offers starting gold, and the review checklist follows Thaleryn rules',async()=>{
+  const submit=characterCommands.find(c=>c.name==='ledger-character').options.find(o=>o.name==='submit');
+  assert.deepEqual(submit.options.map(o=>o.name),['name','sheet','stats','set']);
+  const { reviewPayload } = await import('../src/review-posts.js');
+  const text=JSON.stringify(reviewPayload({guild_id:guild,player_id:'p',name_key:'lyra',name:'Lyra',status:'pending',revision:1,sheet_url:'https://www.dndbeyond.com/characters/1',stats_url:link,stat_set:1,resources:'equipment'},'1553523287412449310'));
+  for(const s of ['legacy only where no 2024 option exists','starting equipment, not gold','one Uncommon magic item','Starting equipment'])assert.ok(text.includes(s),s);
+});

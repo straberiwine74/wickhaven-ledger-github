@@ -31,8 +31,8 @@ export function reviewPayload(c,roleId,note='',{welcome=false}={}){
   const fields=[
     {name:'Character sheet',value:c.sheet_url},
     {name:`Ability scores — chosen set ${c.stat_set}`,value:c.stats_url},
-    {name:'Starting resources',value:`${c.resources==='gold'?'Gold':'Equipment'} from both class and background`},
-    {name:'✅ Check before approving',value:'Level 3 • 2024 rules • official WotC only • legacy only where no 2024 option exists. Check sheet ownership, the chosen stat-set reaction, and starting resources by hand.'}];
+    {name:'Starting resources',value:c.resources==='gold'?'Gold (older submission)':'Starting equipment'},
+    {name:'✅ Check before approving',value:'Level 3 • 2024 rules • legacy only where no 2024 option exists • official WotC only • starting equipment, not gold • one Uncommon magic item. Check sheet ownership, the chosen stat-set reaction, equipment and magic item by hand.'}];
   if(note)fields.push({name:c.status==='rejected'?'✏️ Changes requested by staff':'Staff review note',value:note});
   if(c.status==='rejected')fields.push({name:'Player next step',value:'Update your character, then click **Resubmit Changes**. The review returns to Pending and Moderators are alerted. If your links or options changed, use `/ledger-character submit` again.'});
   // Keep "Review <key> • Revision <n>" at the end of the footer: post lookup depends on it.

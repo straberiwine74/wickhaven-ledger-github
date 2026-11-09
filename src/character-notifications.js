@@ -21,7 +21,7 @@ export class CharacterNotifications{
         await user.send(message(card({title:`✏️ Changes requested: ${clean(c.name)}`,description:'Staff reviewed your character and asked for a few changes before approval.',tone:'warning',fields:[
           {name:'What to change',value:review.note},
           {name:'Review post',value:link},
-          {name:'When you\u2019re done',value:'Click **Resubmit Changes** in your review thread, or use `/ledger-character resubmit` with the same name. If your links, stat set, or resource choice changed, use `/ledger-character submit` again instead. Your review returns to Pending and Moderators are alerted.'}]}),{nonce:requestId,enforceNonce:true}));
+          {name:'When you\u2019re done',value:'Click **Resubmit Changes** in your review thread, or use `/ledger-character resubmit` with the same name. If your links or stat set changed, use `/ledger-character submit` again instead. Your review returns to Pending and Moderators are alerted.'}]}),{nonce:requestId,enforceNonce:true}));
       }catch(error){
         errorCode=String(Number.isInteger(error.code)?error.code:'unknown');
         status=[50007,10013,50001,50013].includes(error.code)?'blocked':n.attempts>=4?'failed':'pending';

@@ -11,8 +11,7 @@ export const characterCommands=[
     {type:1,name:'submit',description:'Submit links for staff review; this does not import a sheet',options:[
       str('name','Character name'),str('sheet','D&D Beyond character URL',300),
       str('stats','Discord message link containing the three stat sets',300),
-      {type:4,name:'set',description:'Chosen stat set; also react to the roll post',required:true,min_value:1,max_value:3},
-      {type:3,name:'resources',description:'Choose the same method for both class and background',required:true,choices:[{name:'Equipment from both',value:'equipment'},{name:'Gold from both',value:'gold'}]}
+      {type:4,name:'set',description:'Chosen stat set; also react to the roll post',required:true,min_value:1,max_value:3}
     ]},
     {type:1,name:'list',description:'View your submitted characters'},
     {type:1,name:'publish',description:'Publish or repair your saved review post',options:[str('name','Submitted character name')]},
@@ -62,7 +61,7 @@ export async function handleCharacterCommand(interaction,ledger,guildId){
       const c=await store.submit(guildId,playerId,{
         name:interaction.options.getString('name',true),sheet:interaction.options.getString('sheet',true),
         stats:interaction.options.getString('stats',true),
-        set:interaction.options.getInteger('set',true),resources:interaction.options.getString('resources',true)
+        set:interaction.options.getInteger('set',true),resources:'equipment'
       });
       let publication;
       try{publication=ledger.reviewPosts?await ledger.reviewPosts.sync(playerId,c.name):'Public review posting isn\u2019t set up yet. Ask an administrator.';}
@@ -77,7 +76,7 @@ export async function handleCharacterCommand(interaction,ledger,guildId){
       const c=await store.resubmit(guildId,playerId,interaction.options.getString('name',true));
       let notice='The review post update is queued.';
       if(ledger.reviewPosts)try{notice=await ledger.reviewPosts.sync(playerId,c.name);}catch{}
-      return message(card({title:`🔁 Resubmitted: ${clean(c.name)}`,description:'Your character is back in the review queue, and staff have been alerted.',tone:'pending',fields:[{name:'Status',value:'Pending review',inline:true},{name:'Review post',value:notice},{name:'Good to know',value:'This reuses your saved links and resource choice. Use `/ledger-character submit` again if those changed.'}]}));
+      return message(card({title:`🔁 Resubmitted: ${clean(c.name)}`,description:'Your character is back in the review queue, and staff have been alerted.',tone:'pending',fields:[{name:'Status',value:'Pending review',inline:true},{name:'Review post',value:notice},{name:'Good to know',value:'This reuses your saved links and stat set. Use `/ledger-character submit` again if those changed.'}]}));
     }
     if(sub==='slots')return formatSlots(await store.slots(guildId,playerId));
     if(sub==='respec'){
@@ -110,8 +109,8 @@ export async function handleCharacterCommand(interaction,ledger,guildId){
     const dm=await ledger.notifications?.latest(player.id,name);
     return message(card({title:`🔍 Review: ${clean(c.name)}`,description:`<@${player.id}> • **${statusName[c.status]}**`,tone:statusTone[c.status],fields:[
       {name:'Character sheet',value:c.sheet_url},{name:`Stat rolls (chosen set ${c.stat_set})`,value:c.stats_url},
-      {name:'Starting resources',value:`${c.resources==='gold'?'Gold':'Equipment'} from both class and background`,inline:true},{name:'Slots used',value:`${s.approved} / ${s.unlocked}`,inline:true},{name:'Player DM',value:c.status==='rejected'?(dm?.status??'not queued'):'not applicable',inline:true},
-      {name:'✅ Check before approving',value:'• Level 3, 2024 rules; legacy only where no 2024 option exists; official WotC content only\n• Sheet belongs to this player; the chosen stat set matches the reaction and the sheet\n• No mixing of equipment and gold packages\n• Submission and links belong to this player'},
+      {name:'Starting resources',value:c.resources==='gold'?'Gold (older submission)':'Starting equipment',inline:true},{name:'Slots used',value:`${s.approved} / ${s.unlocked}`,inline:true},{name:'Player DM',value:c.status==='rejected'?(dm?.status??'not queued'):'not applicable',inline:true},
+      {name:'✅ Check before approving',value:'• Level 3, 2024 rules; legacy only where no 2024 option exists; official WotC content only\n• Sheet belongs to this player; the chosen stat set matches the reaction and the sheet\n• Starting equipment, not starting gold\n• One Uncommon magic item\n• Submission and links belong to this player'},
       {name:'Heads up',value:'The bot only checks link formats. It hasn\u2019t opened or verified the linked content.'}]}));
   }
   const approved=interaction.commandName==='ledger-approve';

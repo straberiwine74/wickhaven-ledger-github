@@ -20,7 +20,7 @@ export async function reviewInteraction(interaction,ledger,guildId){
       if(c.player_id!==interaction.user.id)throw new UserError('Only the player who submitted this character may resubmit it.');
       await ledger.characters.resubmit(guildId,interaction.user.id,c.name,Number(resubmit[2]));
       let notice='';try{await ledger.reviewPosts.sync(c.player_id,c.name);}catch{notice=' The public update is queued for retry.';}
-      await interaction.editReply(message(card({title:`🔁 Resubmitted: ${clean(c.name)}`,description:`Your character is back in the review queue, and staff have been alerted.${notice}`,tone:'pending',fields:[{name:'Good to know',value:'Your saved links and starting-resource choice were reused. Use `/ledger-character submit` again if those changed.'}]})));
+      await interaction.editReply(message(card({title:`🔁 Resubmitted: ${clean(c.name)}`,description:`Your character is back in the review queue, and staff have been alerted.${notice}`,tone:'pending',fields:[{name:'Good to know',value:'Your saved links and stat set were reused. Use `/ledger-character submit` again if those changed.'}]})));
     }catch(error){await interaction.editReply(notice('Resubmission not confirmed',error instanceof UserError?error.message:'Resubmission couldn\u2019t be confirmed. Check the review status before trying again.')).catch(()=>{});}
     return true;
   }
@@ -42,7 +42,7 @@ export async function reviewInteraction(interaction,ledger,guildId){
     }
     if(kind==='char-decision'&&interaction.isModalSubmit()){
       await interaction.deferReply({flags:MessageFlags.Ephemeral});
-      if(decision==='approved'&&interaction.fields.getTextInputValue('confirm').trim()!=='APPROVE')throw new UserError('Review the sheet, stat rolls and starting resources, then type APPROVE to confirm.');
+      if(decision==='approved'&&interaction.fields.getTextInputValue('confirm').trim()!=='APPROVE')throw new UserError('Review the sheet, stat rolls, starting equipment and magic item, then type APPROVE to confirm.');
       const c=await ledger.reviewPosts.byKey(key);
       const result=await ledger.characters.decide({guildId,playerId:c.player_id,name:c.name,moderatorId:interaction.user.id,requestId:interaction.id,decision,note:interaction.fields.getTextInputValue('note'),expectedRevision:revision});
       let notice='';
