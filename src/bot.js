@@ -11,6 +11,7 @@ import { Respecs, respecInteraction } from './respecs.js';
 import { CharacterNotifications } from './character-notifications.js';
 import { installQuests } from './quest-discord.js';
 import { QuestFeedback, questFeedbackCommand } from './quest-feedback.js';
+import { Birthdays, birthdayCommand } from './birthdays.js';
 import { card, message as payload, notice } from './ui.js';
 import { liveConfig, earnsWritingAP, gatheringKind, gatheringCommand, avraeError } from './live.js';
 
@@ -90,6 +91,13 @@ if (pool && /^\d{17,20}$/.test(process.env.QUEST_FEEDBACK_FORUM_ID ?? '')) {
   questFeedback = new QuestFeedback(pool, client, { guildId: DISCORD_GUILD_ID, forumId: process.env.QUEST_FEEDBACK_FORUM_ID, logId: process.env.QUEST_FEEDBACK_LOG_CHANNEL_ID });
   try { await questFeedback.init(); } catch { console.error('Quest feedback could not initialize; /quest is off.'); questFeedback = null; }
 }
+// /birthday shout-outs (BIRTHDAY_CHANNEL_ID, BIRTHDAY_ROLE_ID).
+let birthdays = null;
+if (pool) {
+  birthdays = new Birthdays(pool, client, { guildId: DISCORD_GUILD_ID });
+  try { await birthdays.init(); } catch { console.error('Birthdays could not initialize; /birthday is off.'); birthdays = null; }
+}
+const birthdayTimer = setInterval(() => { if (birthdays && client.isReady()) birthdays.run().catch(() => console.error('Birthday check could not complete; it will try again shortly.')); }, 5 * 60000);
 if (ledger) ledger.staffNotice = async payload => { if (!(live.live ? live.log : TEST_CHANNEL_ID)) throw new Error('No staff channel configured.'); await report(payload); };
 client.once(Events.ClientReady, async () => {
   console.log(`Ledger connected. Mode: ${live.live ? 'LIVE' : savedTestMode ? 'saved TEST AP' : 'ownership test'}.`);
@@ -98,7 +106,7 @@ client.once(Events.ClientReady, async () => {
     const modId = (process.env.MODERATOR_ROLE_IDS ?? '').split(',')[0].trim();
     const modRole = /^\d{17,20}$/.test(modId) ? await guild.roles.fetch(modId).catch(() => null) : null;
     console.log(`Moderator role for reviews: ${modRole ? `${modRole.name} (${modId})` : `NOT FOUND (${modId || 'unset'})`}.`);
-    for (const [label, key] of [['Character review channel','CHARACTERS_CHANNEL_ID'],['AP log','AP_LOG_CHANNEL_ID'],['Quest channel','QUEST_CHANNEL_ID'],['Quest test channel','QUEST_TEST_CHANNEL_ID'],['Test channel','TEST_CHANNEL_ID'],['Quest feedback forum','QUEST_FEEDBACK_FORUM_ID'],['Quest feedback log','QUEST_FEEDBACK_LOG_CHANNEL_ID']]) {
+    for (const [label, key] of [['Character review channel','CHARACTERS_CHANNEL_ID'],['AP log','AP_LOG_CHANNEL_ID'],['Quest channel','QUEST_CHANNEL_ID'],['Quest test channel','QUEST_TEST_CHANNEL_ID'],['Test channel','TEST_CHANNEL_ID'],['Quest feedback forum','QUEST_FEEDBACK_FORUM_ID'],['Quest feedback log','QUEST_FEEDBACK_LOG_CHANNEL_ID'],['Birthday channel','BIRTHDAY_CHANNEL_ID']]) {
       const id = (process.env[key] ?? '').trim();
       if (!id) { console.log(`${label}: not set (${key}).`); continue; }
       const ch = await client.channels.fetch(id).catch(e => ({ error: e.code ?? 'unknown' }));
@@ -106,17 +114,23 @@ client.once(Events.ClientReady, async () => {
       const extra = key === 'CHARACTERS_CHANNEL_ID' ? missingReviewPermissions(ch, client.user) : [];
       console.log(`${label}: #${ch.name} (${id})${extra.length ? ` MISSING ${extra.join(', ')}` : ''}.`);
     }
-    for (const command of [...commands, ...(questFeedback ? [questFeedbackCommand] : [])]) await guild.commands.create(command);
+    for (const command of [...commands, ...(questFeedback ? [questFeedbackCommand] : []), ...(birthdays ? [birthdayCommand] : [])]) await guild.commands.create(command);
     await report(live.live ? notice('📒 The Ledger is online', `**Live AP is on.** Tupper posts in in-character channels earn AP for approved players. This channel logs awards and messages held for review.${live.hunting || live.mining ? '' : '\nHunting/mining AP is off: set HUNTING_CHANNEL_ID and MINING_CHANNEL_ID.'}`, 'success') : savedTestMode ? notice('📒 The Ledger is online', 'Matched Tupper messages in this channel earn **TEST** AP. Use `/ledger-ap` to check your balance. Real progression is unaffected.', 'info') : notice('📒 The Ledger is online', 'Ownership test mode. No AP is awarded.', 'neutral'));
   }
   catch { console.error('Cannot post startup greeting; check test-channel permissions.'); }
   void publishPending();
+  if (birthdays) birthdays.run().catch(() => console.error('Birthday check could not complete; it will try again shortly.'));
 });
 client.on(Events.InteractionCreate, async interaction => {
   if(interaction.customId?.startsWith('quest:')) return;
   if(interaction.isChatInputCommand() && interaction.commandName==='quest'){
     if(!questFeedback) return void interaction.reply({...notice('Quest feedback is off','Ask an administrator to set it up.','neutral'),flags:MessageFlags.Ephemeral}).catch(()=>{});
     try{await questFeedback.start(interaction);}catch{console.error('Quest feedback form could not open.');}
+    return;
+  }
+  if(interaction.isChatInputCommand() && interaction.commandName==='birthday'){
+    if(!birthdays) return void interaction.reply({...notice('Birthdays are off','Ask an administrator to set them up.','neutral'),flags:MessageFlags.Ephemeral}).catch(()=>{});
+    try{await birthdays.command(interaction);}catch{console.error('Birthday command could not complete.');await interaction.reply({...notice('Birthday not saved','Try again in a moment.'),flags:MessageFlags.Ephemeral}).catch(()=>{});}
     return;
   }
   if(interaction.isModalSubmit() && interaction.customId?.startsWith('qfb:')){
