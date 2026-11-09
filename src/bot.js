@@ -11,7 +11,7 @@ import { Respecs, respecInteraction } from './respecs.js';
 import { CharacterNotifications } from './character-notifications.js';
 import { installQuests } from './quest-discord.js';
 import { QuestFeedback, questFeedbackCommand } from './quest-feedback.js';
-import { Birthdays, birthdayCommand } from './birthdays.js';
+import { Birthdays, birthdayCommand, BIRTHDAY_CHANNEL_ID } from './birthdays.js';
 import { card, message as payload, notice } from './ui.js';
 import { liveConfig, earnsWritingAP, gatheringKind, gatheringCommand, avraeError } from './live.js';
 
@@ -107,7 +107,7 @@ client.once(Events.ClientReady, async () => {
     const modRole = /^\d{17,20}$/.test(modId) ? await guild.roles.fetch(modId).catch(() => null) : null;
     console.log(`Moderator role for reviews: ${modRole ? `${modRole.name} (${modId})` : `NOT FOUND (${modId || 'unset'})`}.`);
     for (const [label, key] of [['Character review channel','CHARACTERS_CHANNEL_ID'],['AP log','AP_LOG_CHANNEL_ID'],['Quest channel','QUEST_CHANNEL_ID'],['Quest test channel','QUEST_TEST_CHANNEL_ID'],['Test channel','TEST_CHANNEL_ID'],['Quest feedback forum','QUEST_FEEDBACK_FORUM_ID'],['Quest feedback log','QUEST_FEEDBACK_LOG_CHANNEL_ID'],['Birthday channel','BIRTHDAY_CHANNEL_ID']]) {
-      const id = (process.env[key] ?? '').trim();
+      const id = (process.env[key] ?? '').trim() || (key === 'BIRTHDAY_CHANNEL_ID' ? BIRTHDAY_CHANNEL_ID : '');
       if (!id) { console.log(`${label}: not set (${key}).`); continue; }
       const ch = await client.channels.fetch(id).catch(e => ({ error: e.code ?? 'unknown' }));
       if (!ch || ch.error) { console.log(`${label}: NOT VISIBLE (${id}, Discord ${ch?.error ?? 'unknown'}). Check ${key} and the Ledger's View Channel permission.`); continue; }

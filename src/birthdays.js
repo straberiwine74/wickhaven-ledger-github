@@ -100,8 +100,15 @@ export class Birthdays {
     const names = celebrate.map(id => `<@${id}>`);
     const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
     const channel = await this.client.channels.fetch(this.channelId).catch(() => null);
-    await channel?.send({ content: `🎂 Happy birthday, ${list}! Wickhaven raises a tankard in your honor today.`, allowedMentions: { parse: [], users: celebrate } })
-      .catch(e => console.error(`Birthday shout-out could not be posted (Discord ${e?.code ?? 'error'}).`));
+    try {
+      if (!channel?.send) throw Object.assign(new Error('Channel not visible'), { code: 50001 });
+      await channel.send({ content: `🎂 Happy birthday, ${list}! Wickhaven raises a tankard in your honor today.`, allowedMentions: { parse: [], users: celebrate } });
+    } catch (e) {
+      // Un-claim so the next check (every 5 minutes) tries again once the channel is fixed.
+      await this.pool.query('DELETE FROM ledger_birthday_celebrations WHERE guild_id=$1 AND day=$2 AND player_id = ANY($3)', [this.guildId, today, celebrate]);
+      console.error(`Birthday shout-out could not be posted in ${this.channelId} (Discord ${e?.code ?? 'error'}). The Ledger needs View Channel and Send Messages there; it will retry in 5 minutes.`);
+      return [];
+    }
     return celebrate;
   }
 }

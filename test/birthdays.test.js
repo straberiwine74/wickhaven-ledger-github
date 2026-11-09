@@ -32,5 +32,11 @@ test('one shout-out per day, role added then removed the next day, never repeate
     assert.ok(!roles.get('p1').has('1553500000000000001'));assert.equal(posts.length,1);
     assert.deepEqual(await b.get('p3'),{month:12,day:25});
     assert.equal(await b.remove('p3'),1);assert.equal(await b.get('p3'),null);
+    // A failed post (missing permissions) is retried on the next check instead of being skipped.
+    await b.set('p1',11,10);let fail=true;
+    client.channels.fetch=async()=>({send:async p=>{if(fail)throw Object.assign(new Error('Missing Permissions'),{code:50013});posts.push(p);}});
+    assert.deepEqual(await b.run(new Date('2026-11-10T06:10:00Z')),[]);assert.equal(posts.length,1);
+    fail=false;
+    assert.deepEqual(await b.run(new Date('2026-11-10T06:15:00Z')),['p1']);assert.equal(posts.length,2);
   }finally{await db.close();}
 });
