@@ -1,6 +1,7 @@
 import { UserError, staffAllowed } from './admin.js';
 import { notifyChanges } from './character-notifications.js';
 import { promoteApplicant } from './roles.js';
+import { sendApprovalWelcome } from './approval-welcome.js';
 import { card, message, clean, testNote } from './ui.js';
 const statusName={pending:'Pending review',approved:'Approved',rejected:'Changes requested',retired:'Retired'};
 const statusTone={pending:'pending',approved:'success',rejected:'warning',retired:'neutral'};
@@ -119,7 +120,8 @@ export async function handleCharacterCommand(interaction,ledger,guildId){
   let post='';
   if(ledger.reviewPosts)try{post=await ledger.reviewPosts.sync(player.id,name);}catch{post='Decision saved; the review post update is queued for retry.';}
   const promoted=approved&&!result.duplicate?await promoteApplicant({client:interaction.client,pool:store.pool,guildId,playerId:player.id,nameKey:name.trim().toLowerCase()}):null;
-  const roles=promoted==='promoted'?'Adventurer added, Applicant removed.':promoted==='left'?'The player has left the server; no roles were changed.':promoted==='failed'?'The role change failed. A note is in the review post; swap the roles by hand.':'No Discord roles were changed.';
+  const welcomed=promoted&&promoted!=='left'?await sendApprovalWelcome({client:interaction.client,pool:store.pool,guildId,playerId:player.id,nameKey:name.trim().toLowerCase(),name:result.name??name}):null;
+  const roles=(welcomed==='dm'?'Next steps sent by DM. ':welcomed==='thread'?'DMs closed; next steps posted in the thread. ':'')+(promoted==='promoted'?'Adventurer added, Applicant removed.':promoted==='left'?'The player has left the server; no roles were changed.':promoted==='failed'?'The role change failed. A note is in the review post; swap the roles by hand.':'No Discord roles were changed.');
   const dm=approved?'':await notifyChanges(ledger,interaction.id);
   return message(card({title:result.duplicate?'Review already recorded':approved?`✅ Approved: ${clean(name)}`:`✏️ Changes requested: ${clean(name)}`,description:`<@${player.id}>\n${approved?'A character slot is now in use. The first approval starts the 30/60-day clock; later approvals don\u2019t reset it.':'The player can fix the character and resubmit under the same name. No slot was used.'}`,tone:result.duplicate?'neutral':approved?'success':'warning',
     fields:[{name:'Review post',value:post},{name:'Player DM',value:dm},{name:'Recorded',value:`Your decision and note are saved. ${roles}`}]}));
