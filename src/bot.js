@@ -2,7 +2,7 @@ import { Client, Events, GatewayIntentBits, Partials, MessageFlags } from 'disco
 import pg from 'pg';
 import { TestLedger } from './store.js';
 import { countWords } from './activity.js';
-import { ProxyTracker } from './proxy.js';
+import { ProxyTracker, isAppReply } from './proxy.js';
 import { commands, handleCommand } from './commands.js';
 import { UserError } from './admin.js';
 import { ReviewPosts, missingReviewPermissions } from './review-posts.js';
@@ -180,6 +180,9 @@ client.on(Events.MessageCreate, async message => {
   if (live.live && message.guildId === DISCORD_GUILD_ID && message.author.id !== client.user.id) void gathering(message);
   if (!isTracked(message) || message.author.id === client.user.id) return;
   if (message.author.bot && !message.webhookId) return;
+  // Slash-command replies from other apps arrive as webhook messages owned by
+  // that application (not Tupper posts) and can't be looked up. Skip them.
+  if (isAppReply(message)) return;
   try {
     const words = countWords(message.content);
     recent.set(message.id, { expires: Date.now() + 120000 });
@@ -198,9 +201,9 @@ client.on(Events.MessageCreate, async message => {
       let trustDetail = '';
       try { const verification = await trustedProxy(message); trusted = verification.trusted; trustDetail = verification.detail; }
       catch (error) {
-        const code = Number.isInteger(error.code) ? error.code : 'unknown';
+        const code = error?.code ?? 'unknown';
         trustDetail = `Webhook lookup failed (Discord code ${code}). Check Ledger's effective Manage Webhooks permission in this channel.`;
-        console.error(`Webhook creator lookup failed; Discord code ${code}.`);
+        console.error(`Webhook creator lookup failed; Discord code ${code}${Number.isInteger(code) ? '' : ` (${error?.message ?? 'no message'})`} in channel ${message.channelId}.`);
       }
       tracker.proxy({ id: message.id, channelId: message.channelId, content: message.content, time: message.createdTimestamp, trusted });
       const timer = setTimeout(async () => {

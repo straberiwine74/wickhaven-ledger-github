@@ -51,3 +51,7 @@ export class ProxyTracker {
     for (const [id, p] of this.proxies) if (now - p.time > 120000) this.proxies.delete(id);
   }
 }
+
+// Slash-command replies from other apps are webhook messages owned by that
+// application, not Tupper posts.
+export const isAppReply = message => Boolean(message.webhookId && (message.interactionMetadata || message.interaction || (message.applicationId && message.webhookId === message.applicationId)));

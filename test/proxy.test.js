@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ProxyTracker } from '../src/proxy.js';
+import { isAppReply } from '../src/proxy.js';
 function setup(content = 'L:Hello there') {
   const t = new ProxyTracker([{ playerId: 'p1', prefix: 'L:', suffix: '' }]);
   t.original({ id: 'o1', playerId: 'p1', channelId: 'c', content, time: 1000 });
@@ -39,4 +40,11 @@ test('newly loaded registered brackets match even after original deletion', () =
   t.addBrackets('o1','R:Hello there',[{ prefix: 'R:', suffix: '' }]);
   proxy(t);
   assert.equal(t.resolve('x').playerId,'p1');
+});
+
+test('slash-command replies from other apps are not treated as Tupper posts',()=>{
+  assert.equal(isAppReply({webhookId:'123',applicationId:'123'}),true);
+  assert.equal(isAppReply({webhookId:'999',interactionMetadata:{id:'1'}}),true);
+  assert.equal(isAppReply({webhookId:'555',applicationId:null}),false);
+  assert.equal(isAppReply({webhookId:null}),false);
 });
