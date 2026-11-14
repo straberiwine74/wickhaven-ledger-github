@@ -84,6 +84,7 @@ export class TestLedger {
         player_id text NOT NULL, day text NOT NULL, delta integer NOT NULL,
         before_ap integer NOT NULL, after_ap integer NOT NULL, reason text NOT NULL,
         created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (guild_id,request_id))`);
+      await db.query('ALTER TABLE ledger_test_adjustments ADD COLUMN IF NOT EXISTS words integer');
       for (const sql of characterSchema) await db.query(sql);
       await db.query(awardSchema);
       for (const sql of awardColumns) await db.query(sql);
@@ -130,8 +131,35 @@ export class TestLedger {
     } catch (e) { await db.query('ROLLBACK'); throw e; }
     finally { db.release(); }
   }
+  // Staff word credit (e.g. a legitimate post that was held). Counts toward today
+  // exactly like writing: fills the 300-word tally, awards AP, respects the cap.
+  async adjustWords({ guildId, playerId, moderatorId, requestId, words, reason, time = Date.now() }) {
+    if (!Number.isInteger(words) || words < 1 || words > 3000) throw new UserError('Credit 1 to 3,000 words.');
+    reason = String(reason ?? '').trim();
+    if (reason.length < 5 || reason.length > 300) throw new UserError('Provide a reason of 5–300 characters.');
+    const day = serverDay(new Date(time));
+    const db = await this.pool.connect();
+    try {
+      await db.query('BEGIN');
+      await db.query('INSERT INTO ledger_test_players (guild_id,player_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [guildId,playerId]);
+      const account = (await db.query('SELECT remainder FROM ledger_test_players WHERE guild_id=$1 AND player_id=$2 FOR UPDATE', [guildId,playerId])).rows[0];
+      const prior = (await db.query('SELECT before_ap,after_ap,delta FROM ledger_test_adjustments WHERE guild_id=$1 AND request_id=$2', [guildId,requestId])).rows[0];
+      if (prior) { await db.query('ROLLBACK'); return { duplicate: true, ...prior, awarded: prior.delta, remainder: account.remainder }; }
+      await settleHeld(db, guildId, playerId, day);
+      await db.query('INSERT INTO ledger_test_days (guild_id,player_id,day) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [guildId,playerId,day]);
+      const before = (await db.query('SELECT ap FROM ledger_test_days WHERE guild_id=$1 AND player_id=$2 AND day=$3', [guildId,playerId,day])).rows[0].ap;
+      const result = creditWriting({ remainder: account.remainder, dailyAP: before }, words);
+      await db.query('UPDATE ledger_test_players SET remainder=$3 WHERE guild_id=$1 AND player_id=$2', [guildId,playerId,result.remainder]);
+      await db.query('UPDATE ledger_test_days SET ap=$4 WHERE guild_id=$1 AND player_id=$2 AND day=$3', [guildId,playerId,day,result.dailyAP]);
+      await db.query(`INSERT INTO ledger_test_adjustments (guild_id,request_id,moderator_id,player_id,day,delta,before_ap,after_ap,reason,words)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [guildId,requestId,moderatorId,playerId,day,result.awarded,before,result.dailyAP,reason,words]);
+      await db.query('COMMIT');
+      return { duplicate: false, awarded: result.awarded, before_ap: before, after_ap: result.dailyAP, remainder: result.remainder, capped: before === 4 };
+    } catch (e) { await db.query('ROLLBACK'); throw e; }
+    finally { db.release(); }
+  }
   async audit(guildId, playerId) {
-    return (await this.pool.query(`SELECT moderator_id,day,delta,before_ap,after_ap,reason,created_at
+    return (await this.pool.query(`SELECT moderator_id,day,delta,before_ap,after_ap,reason,words,created_at
       FROM ledger_test_adjustments WHERE guild_id=$1 AND player_id=$2 ORDER BY created_at DESC,request_id DESC LIMIT 10`, [guildId,playerId])).rows;
   }
   async record({ guildId, playerId, originalId, proxyId, words, time }) {

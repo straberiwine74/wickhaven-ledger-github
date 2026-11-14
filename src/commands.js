@@ -19,9 +19,10 @@ export const commands = [
   ] },
   { name: 'ledger-adjust', description: 'Staff: adjust a player\u2019s AP with a recorded reason', default_member_permissions: '0', options: [
     { type: 6, name: 'player', description: 'Player to adjust', required: true },
-    { type: 4, name: 'change', description: 'AP to add or remove, -4 through +4', required: true, min_value: -4, max_value: 4 },
     stringOption('reason','Reason for the correction; no sensitive scene text',true,300),
-    stringOption('day','YYYY-MM-DD; defaults to today in America/Chicago',false,10)
+    { type: 4, name: 'change', description: 'AP to add or remove, -4 through +4 (use this OR words)', required: false, min_value: -4, max_value: 4 },
+    { type: 4, name: 'words', description: 'Words to credit toward AP, e.g. a held post (use this OR change; counts today)', required: false, min_value: 1, max_value: 3000 },
+    stringOption('day','AP changes only: YYYY-MM-DD; defaults to today in America/Chicago',false,10)
   ] },
   { name: 'ledger-audit', description: 'Staff: review recent AP adjustments', default_member_permissions: '0', options: [
     { type: 6, name: 'player', description: 'Player to review', required: true }
@@ -55,15 +56,24 @@ export async function handleCommand(interaction, ledger, guildId) {
     const target = interaction.options.getUser('player',true);
     if (target.bot) throw new UserError('Choose a player, not a bot.');
     if (interaction.commandName === 'ledger-adjust') {
+      const change = interaction.options.getInteger('change'), words = interaction.options.getInteger('words');
+      if ((change === null) === (words === null)) throw new UserError('Use either `change` (whole AP) or `words` (word credit), not both or neither.');
+      if (words !== null) {
+        if (interaction.options.getString('day')) throw new UserError('Word credit always counts toward today. Leave `day` empty, or use `change` for an earlier day.');
+        const r = await ledger.adjustWords({ guildId, playerId: target.id, moderatorId: playerId, requestId: interaction.id, words, reason: interaction.options.getString('reason',true) });
+        return message(card({title:`✍️ Word credit ${r.duplicate ? 'already recorded' : 'saved'}`,description:`<@${target.id}> • **+${words}** words, counted like regular writing. The reason and your moderator ID are recorded.`,tone:r.duplicate?'neutral':'success',fields:[
+          {name:'AP earned',value:`+${r.awarded}`,inline:true},{name:'Today',value:`${r.before_ap} → **${r.after_ap}** / 4 AP`,inline:true},{name:'Toward next AP',value:`${r.remainder} / 300 words`,inline:true},
+          ...(r.capped?[{name:'Daily cap',value:'They were already at 4 AP today, so these words didn\u2019t count. Credit them tomorrow, or use `change` for an earlier day.'}]:[])]}));
+      }
       const day = interaction.options.getString('day') ?? serverDay(new Date());
-      const result = await ledger.adjust({ guildId, playerId: target.id, moderatorId: playerId, requestId: interaction.id, delta: interaction.options.getInteger('change',true), day, reason: interaction.options.getString('reason',true) });
+      const result = await ledger.adjust({ guildId, playerId: target.id, moderatorId: playerId, requestId: interaction.id, delta: change, day, reason: interaction.options.getString('reason',true) });
       return message(card({title:`⚖️ AP adjustment ${result.duplicate ? 'already recorded' : 'saved'}`,description:`<@${target.id}>\nTotal AP and active days reflect this correction. The reason and your moderator ID are recorded.`,tone:result.duplicate?'neutral':'success',fields:[
         {name:'Day',value:day,inline:true},{name:'Daily AP',value:`${result.before_ap} → **${result.after_ap}**`,inline:true},
         {name:'Note',value:'This adjusts AP only. Unfinished words are unchanged, and the source writing may still earn credit later.'}]}));
     }
     const rows = await ledger.audit(guildId,target.id);
     return message(card({title:'⚖️ AP adjustment history',description:rows.length?`<@${target.id}> • most recent first`:`No AP adjustments recorded for <@${target.id}>.`,tone:'info',
-      fields:rows.slice(0,20).map(r=>({name:`${r.day} • ${r.delta > 0 ? '+' : ''}${r.delta} AP (${r.before_ap} → ${r.after_ap})`,value:`${clean(r.reason)}\nModerator: <@${r.moderator_id}>`}))}));
+      fields:rows.slice(0,20).map(r=>({name:`${r.day} • ${r.words ? `+${r.words} words (${r.delta > 0 ? '+' : ''}${r.delta} AP)` : `${r.delta > 0 ? '+' : ''}${r.delta} AP`} (${r.before_ap} → ${r.after_ap})`,value:`${clean(r.reason)}\nModerator: <@${r.moderator_id}>`}))}));
   }
   if (ledger.settle) await ledger.settle(guildId,playerId);
   const s = await ledger.status(guildId,playerId);
