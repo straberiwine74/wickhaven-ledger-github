@@ -3,7 +3,7 @@ import { QuestStore, verifyExport, questChannels } from './quest.js';
 import { getQuest } from './quests/index.js';
 import { questOf, choicesFor } from './quest-engine.js';
 import { SKILLS, checksUsed } from './quest-schema.js';
-import { resourceReceipt, hasResourceChanges, resourceDelta } from './quest-resources.js';
+import { resourceReceipt, hasResourceChanges, resourceDelta, settleCommand } from './quest-resources.js';
 import { runClickDiagnostic } from './quest-race.js';
 import { canReview } from './review-interactions.js';
 import { card, message, notice, clean, signed, fitLines, testNote } from './ui.js';
@@ -24,6 +24,15 @@ export function changeSummary(run) {
   return out.join(', ')||'none';
 }
 
+// Ending receipt: one command that applies the changes in Avrae and verifies them.
+// Falls back to the manual two-step when settleCommand can't build a safe command.
+export function settleField(run) {
+  const cmd=settleCommand(run),changes=`**${changeSummary(run)}**`;
+  return {name:'🧾 Settle your expedition',value:cmd
+    ?`This updates your Avrae sheet with what happened on the quest:\n${changes}\n\n**Run this one command:**\n\`${cmd}\`\nNew expeditions stay locked until you run it.`
+    :`${changes}\nUpdate your bags, HP, or coins in Avrae by hand, then verify with:\n\`!depart reconcile ${run.id}\`\nNew expeditions stay locked until this matches.`};
+}
+
 export function rollLine(roll) {
   if(!roll) return null;
   const face=roll.total-roll.modifier;
@@ -41,7 +50,7 @@ export function suppliesView(run) {
     fields:[
       {name:'❤️ Hit Points',value:`${r.starting.hp} → **${r.current.hp}**${r.starting.tempHp||r.current.tempHp?`\nTemp ${r.starting.tempHp} → **${r.current.tempHp}**`:''}`,inline:true},
       {name:'💰 Coins',value:coinChange,inline:true},
-      {name:'📦 Changes',value:changed?`${changeSummary(run)}\nUpdate Avrae by hand. Automatic write-back isn't available.`:'No changes. Nothing to copy back to Avrae.'},
+      {name:'📦 Changes',value:changed?`${changeSummary(run)}\n${settleCommand(run)&&r.status==='final'?`Settle with:\n\`${settleCommand(run)}\``:'Update Avrae by hand when the expedition ends.'}`:'No changes. Nothing to copy back to Avrae.'},
       {name:'🎲 Saved roll',value:rollLine(r.lastRoll)??'No approach roll yet.'},
       {name:'🧾 Receipt',value:`Inventory source: ${r.source}. Full starting and current item quantities are in the attached file.`}
     ],
@@ -114,7 +123,7 @@ export function sceneEmbed(run,knowledge=[]) {
     fields.push({name:'💰 Coins',value:coinLine(state.coins),inline:true});
   }
   if(state.scene==='town') fields.push({name:'⏸️ Expedition paused',value:'Your progress, discoveries, and supplies stay locked until you return.'});
-  if(pending) fields.push({name:'📦 Copy into Avrae',value:`**${changeSummary(run)}**\nUpdate your bags, HP, or coins in Avrae, then verify with:\n\`!depart reconcile ${run.id}\`\nNew expeditions stay locked until this matches.`});
+  if(pending) fields.push(settleField(run));
   else if(['complete','downed'].includes(state.scene)) fields.push({name:'📦 Supplies',value:'No changes. Nothing to copy back to Avrae.'});
   if(knowledge.length) fields.push({name:'📜 Known observations',value:fitLines(knowledge.map(observation))});
   return card({

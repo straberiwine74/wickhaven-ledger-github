@@ -5,7 +5,7 @@ export default {
   "id": "saint-orras-orchard",
   "name": "Saint Orra’s Orchard",
   "emoji": "🍎",
-  "status": "live",
+  "status": "hidden",
   "start": "orchard-gate",
   "completion": {
     "milestone": "orra-orchard-discovery",

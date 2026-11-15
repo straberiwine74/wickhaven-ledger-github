@@ -5,7 +5,7 @@ export default {
   "id": "brinehook-undercroft",
   "name": "The Brinehook Undercroft",
   "emoji": "🗝️",
-  "status": "live",
+  "status": "hidden",
   "start": "market-stairs",
   "completion": {
     "milestone": "brinehook-records",

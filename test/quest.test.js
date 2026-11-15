@@ -4,6 +4,9 @@ import { PGlite } from '@electric-sql/pglite';
 import { TestLedger } from '../src/store.js';
 import { QuestStore, validateSnapshot, verifyExport, transition, parseVerificationResponse } from '../src/quest.js';
 import { questView, departureFailure } from '../src/quest-discord.js';
+import { quests } from '../src/quests/index.js';
+// Drowned Watch is retired (hidden) but still the engine's test fixture.
+quests['drowned-watch']=Object.freeze({...quests['drowned-watch'],status:'test'});
 
 test('departure diagnostics explain known errors and hide unexpected private details',()=>{
   const f=departureFailure('Ledger approval and expedition save',new Error('This imported sheet needs Ledger TEST approval first.'));assert.match(f.embeds[0].description,/TEST approval first/);assert.equal(f.embeds[0].title,'⛔ Departure stopped');

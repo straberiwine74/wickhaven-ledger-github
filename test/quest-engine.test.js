@@ -8,6 +8,8 @@ import { validateQuest, SKILLS, ABILITIES, checksUsed } from '../src/quest-schem
 import { quests, registerQuest } from '../src/quests/index.js';
 import { BAG_COLLECTION } from '../src/quest-resources.js';
 import { questView } from '../src/quest-discord.js';
+// Drowned Watch is retired (hidden) but still the engine's test fixture.
+quests['drowned-watch']=Object.freeze({...quests['drowned-watch'],status:'test'});
 
 const g='111111111111111111',p='222222222222222222';
 const trial={id:'engine-trial',name:'Engine Trial',emoji:'🧪',status:'test',start:'gate',
@@ -48,7 +50,7 @@ test('engine resolves ability checks, saves with advantage, passives, damage, mi
   const hurt=transition(run,'force',sides=>sides===20?2:3);assert.equal(hurt.lastDamage,4);assert.equal(hurt.tempHp,0);assert.equal(hurt.hp,8);assert.equal(hurt.scene,'hall');
   let dice=[3,11];const saved=transition(run,'dodge',()=>dice.shift());assert.equal(saved.roll.total,13);assert.equal(saved.roll.success,true);
   const downed=transition(run,'dodge',()=>1);assert.equal(downed.scene,'downed');assert.equal(downed.hp,0);assert.match(downed.text,/Downed in the trial/);
-  const view=questView({...run,state:downed}).embeds[0];assert.match(view.title,/Carried Home/);assert.ok(view.fields.some(f=>f.name==='📦 Copy into Avrae'));
+  const view=questView({...run,state:downed}).embeds[0];assert.match(view.title,/Carried Home/);assert.ok(view.fields.some(f=>f.name==='🧾 Settle your expedition'));
   assert.throws(()=>transition(run,'secret'),/no longer available/);assert.equal(transition(run,'secret',undefined,['hidden-latch']).scene,'hall');
   const review=questView({...run,state:{...run.state,scene:'review'}}).embeds[0];assert.match(review.fields.find(f=>f.name==='🧭 This expedition may test').value,/Dexterity save/);assert.ok(review.fields.some(f=>f.name==='🛡️ Saving throws'));
 });

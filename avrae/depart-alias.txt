@@ -3,22 +3,32 @@ c = character()
 args = &ARGS&
 reconcile = None
 quest = None
+settle = []
 allowed = "abcdefghijklmnopqrstuvwxyz0123456789-"
-if len(args) == 2 and args[0] == "reconcile":
+if len(args) >= 2 and args[0] in ["reconcile", "settle"]:
     reconcile = args[1]
     quest = "reconcile"
+    if len(reconcile) != 36 or any(ch not in "abcdef0123456789-" for ch in reconcile):
+        err("That receipt id doesn't look right. Copy the command exactly as the Ledger posted it.")
+    if args[0] == "settle":
+        settle = args[2:]
+    elif len(args) != 2:
+        err("Use !depart reconcile <receipt-id>, or the !depart settle command from your receipt.")
 elif len(args) == 1 and 2 <= len(args[0]) <= 40 and not any(ch not in allowed for ch in args[0].lower()):
     quest = args[0].lower()
 else:
-    err("Use !depart <quest code> (for example !depart drowned-watch) or !depart reconcile <receipt-id>.")
+    err("Use !depart <quest code> (for example !depart drowned-watch), or the !depart settle command from your expedition receipt.")
 
 # Read Bags Rewritten's stored character data without invoking its mutating helpers.
 raw = load_yaml(c.get_cvar("bags", "null"))
 if raw is None:
     err("No Bags Rewritten inventory found. Run !bag on this character first. No declared-inventory fallback is used.")
+default_bags = ["Pack", "Belt", "Potions", "Scrolls"]
 selected = load_json(c.get_cvar("ledger_carried_bags", "null"))
 if not selected:
-    err('Choose carried bags first, for example: !cvar ledger_carried_bags ["Backpack"]')
+    selected = [b[0] for b in raw if b[0] in default_bags]
+if not selected:
+    err('No carried bags found. Choose some with: !cvar ledger_carried_bags ["Pack"]')
 if len(set(selected)) != len(selected):
     err("Choose each carried bag only once.")
 names = [b[0] for b in raw]
@@ -33,6 +43,71 @@ pouch_name = get_svar("coinPouchName") or c.get_cvar("coinPouchName", "Coin Pouc
 pouches = [b for b in raw if b[0] == pouch_name]
 coin_keys = ["pp", "gp", "ep", "sp", "cp"]
 p = c.coinpurse
+
+# !depart settle: apply the ending receipt to Avrae, then export as a reconcile.
+# Final values only (hp=12, gp=31, "Pack:Rope=0"), so running it twice is harmless.
+# Everything is checked first; if anything fails, nothing is changed.
+report = []
+if settle:
+    hp_new = None
+    temp_new = None
+    coin_new = {}
+    item_new = []
+    for t in settle:
+        if "=" not in t:
+            err("Couldn't read " + t + ". Copy the settle command exactly as the Ledger posted it. Nothing was changed.")
+        key, val = t.rsplit("=", 1)
+        if not val.isdigit() or len(val) > 7:
+            err("Couldn't read " + t + ". Copy the settle command exactly as the Ledger posted it. Nothing was changed.")
+        n = int(val)
+        if key == "hp":
+            hp_new = n
+        elif key == "temp":
+            temp_new = n
+        elif key in coin_keys:
+            coin_new[key] = n
+        elif ":" in key:
+            bag_name, item = key.split(":", 1)
+            if bag_name not in selected:
+                err("Your carried bags don't include " + bag_name + ". Check !bag and ledger_carried_bags, then run the settle command again. Nothing was changed.")
+            item_new.append([bag_name, item, n])
+        else:
+            err("Couldn't read " + t + ". Copy the settle command exactly as the Ledger posted it. Nothing was changed.")
+    pouch_used = pouches and pouch_name in selected
+    if coin_new and pouches and not pouch_used:
+        err("Your coins live in " + pouch_name + ", but that bag isn't carried. Add it to ledger_carried_bags, then run the settle command again. Nothing was changed.")
+    # All checks passed: apply.
+    if hp_new is not None:
+        report.append("HP: " + str(c.hp) + " → **" + str(hp_new) + "**")
+        c.set_hp(hp_new)
+    if temp_new is not None:
+        report.append("Temp HP: " + str(c.temp_hp) + " → **" + str(temp_new) + "**")
+        c.set_temp_hp(temp_new)
+    if coin_new:
+        if pouch_used:
+            purse = pouches[0][1]
+            old = {k: purse.get(k, 0) for k in coin_keys}
+            for k, v in coin_new.items():
+                purse[k] = v
+        else:
+            old = {"pp": p.pp, "gp": p.gp, "ep": p.ep, "sp": p.sp, "cp": p.cp}
+            new = {k: coin_new.get(k, old[k]) for k in coin_keys}
+            p.set_coins(new["pp"], new["gp"], new["ep"], new["sp"], new["cp"])
+        for k in coin_keys:
+            if k in coin_new and coin_new[k] != old[k]:
+                report.append("Coins: " + str(old[k]) + " " + k + " → **" + str(coin_new[k]) + " " + k + "**")
+    for bag_name, item, n in item_new:
+        contents = [b for b in raw if b[0] == bag_name][0][1]
+        before = contents.get(item, 0)
+        if n:
+            contents[item] = n
+        elif item in contents:
+            contents.pop(item)
+        report.append(item + " (" + bag_name + "): " + str(before) + " → **" + str(n) + "**")
+    if (coin_new and pouch_used) or item_new:
+        c.set_cvar("bags", dump_json(raw))
+    if not report:
+        report.append("Already up to date. Nothing needed changing.")
 coins = {"pp": p.pp, "gp": p.gp, "ep": p.ep, "sp": p.sp, "cp": p.cp}
 coin_source = "avrae-coinpurse"
 if pouches:
@@ -83,6 +158,7 @@ if len(encoded) > 3800:
     err("Carried inventory is too large to export in one message. Choose fewer carried bags or ask staff; do not hide carried equipment to fit.")
 desc = "```json\n" + encoded + "\n```"
 </drac2>
--title "BTLL departure v1"
+-title "Chronicles of Thaleryn Solo Expedition"
 -desc {{dump_json(desc).replace("\\n", "\n")}}
--footer "Full sheet + selected carried bags. Review before confirming."
+{{("-f " + dump_json("✅ Avrae sheet updated|" + "\n".join(report)).replace("\\n", "\n")) if report else ""}}
+-footer "{{"Settled. The Ledger is verifying this export." if settle else "Full sheet + selected carried bags. Review before confirming."}}"

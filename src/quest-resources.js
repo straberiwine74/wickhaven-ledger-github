@@ -38,6 +38,21 @@ export function hasResourceChanges(run) {
 export function resourceReceipt(run) {
   return {format:'btll-resource-receipt-v1',run:run.id,revision:run.revision,character:run.character_id,source:run.snapshot.loadout.source,status:run.finished?'final':'in-progress',starting:initial(run),current:resources(run),changes:resourceDelta(run),lastRoll:run.state.roll??null,writeBack:'manual; no automatic Avrae or D&D Beyond changes'};
 }
+// One-paste write-back for the ending receipt. Uses FINAL values for each changed
+// field (not +/-), so running it twice is harmless; the Ledger still verifies the
+// fresh export with matchesEnding. Returns null when a name can't be passed safely.
+export function settleCommand(run) {
+  const end=resources(run),d=resourceDelta(run),after=keyed(end.items),args=[];
+  if(d.hp) args.push(`hp=${end.hp}`);
+  if(d.tempHp) args.push(`temp=${end.tempHp}`);
+  for(const k of coins) if(d.coins[k]) args.push(`${k}=${end.coins[k]??0}`);
+  for(const i of d.items) {
+    if(!i.bag||/[":=]/.test(i.bag)||/["=]/.test(i.name)) return null;
+    args.push(`"${i.bag}:${i.name}=${after.get(JSON.stringify([i.bag,i.name]))??0}"`);
+  }
+  const cmd=`!depart settle ${run.id}${args.length?' '+args.join(' '):''}`;
+  return cmd.length<=900?cmd:null;
+}
 export function matchesEnding(run,snapshot) {
   const end=resources(run),actual={hp:snapshot.hp,tempHp:snapshot.tempHp,items:snapshot.loadout.items,coins:snapshot.coins};
   if(end.hp!==actual.hp||end.tempHp!==actual.tempHp) return false;

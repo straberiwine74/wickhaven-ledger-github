@@ -7,9 +7,11 @@ import { quests } from '../src/quests/index.js';
 import { questFacts } from '../src/quest-schema.js';
 import { handleJournal, journalLine } from '../src/journal.js';
 import { BAG_COLLECTION } from '../src/quest-resources.js';
+// Drowned Watch is retired (hidden) but still the engine's test fixture.
+quests['drowned-watch']=Object.freeze({...quests['drowned-watch'],status:'test'});
 
 test('every discovery in every launch quest has a readable journal line',()=>{
-  for(const id of ['drowned-watch','briarfall-road','saint-orras-orchard','brinehook-undercroft','second-beacon']) {
+  for(const id of Object.keys(quests)) {
     const q=quests[id];const missing=[...questFacts(q)].filter(f=>!q.journal?.[f]);
     assert.deepEqual(missing,[],`${id} is missing journal lines`);
     assert.deepEqual(Object.keys(q.journal).filter(f=>!questFacts(q).has(f)),[],`${id} has journal lines for discoveries it never grants`);
@@ -33,9 +35,9 @@ test('journal shows a character’s own visits and discoveries; only staff can r
     const summary=(await handleJournal(interaction(p),ledger,g)).embeds[0];
     assert.equal(summary.title,'📖 Tannia’s Journal');
     const dw=summary.fields.find(f=>f.name==='🗼 Drowned Watch');assert.match(dw.value,/\*\*1\*\* completed/);assert.match(dw.value,/First completion: ✅/);
-    assert.match(summary.fields.find(f=>f.name==='🗺️ Not yet explored').value,/Briarfall Road/);
-    assert.doesNotMatch(summary.fields.find(f=>f.name==='🗺️ Not yet explored').value,/Second Beacon/);
-    await assert.rejects(handleJournal(interaction(p,{quest:'second-beacon'}),ledger,g),/isn’t open yet/);
+    assert.match(summary.fields.find(f=>f.name==='🗺️ Not yet explored').value,/Northern Shallows/);
+    assert.doesNotMatch(summary.fields.find(f=>f.name==='🗺️ Not yet explored').value,/Ash-Sealed Ledger/);
+    await assert.rejects(handleJournal(interaction(p,{quest:'ash-sealed-ledger'}),ledger,g),/isn’t open yet/);
     const detail=(await handleJournal(interaction(p,{quest:'drowned-watch'}),ledger,g)).embeds[0];
     const found=detail.fields.find(f=>f.name==='🔎 Discoveries').value;
     assert.match(found,/lower passage is usable only at low tide/);assert.doesNotMatch(found,/Culvert low tide\./);

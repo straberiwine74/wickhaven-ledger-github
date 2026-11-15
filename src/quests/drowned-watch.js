@@ -10,7 +10,7 @@ export default {
   "id": "drowned-watch",
   "name": "Drowned Watch",
   "emoji": "🗼",
-  "status": "live",
+  "status": "hidden",
   "start": "shore",
   "completion": {
     "milestone": "watch-reconnaissance",

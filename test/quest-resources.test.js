@@ -3,9 +3,12 @@ import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
 import { TestLedger } from '../src/store.js';
 import { QuestStore, validateSnapshot, transition, tideBoxOffered } from '../src/quest.js';
-import { BAG_COLLECTION, importBags, resources, resourceReceipt, spendResources, matchesEnding } from '../src/quest-resources.js';
+import { BAG_COLLECTION, importBags, resources, resourceReceipt, spendResources, matchesEnding, settleCommand } from '../src/quest-resources.js';
 import { suppliesView, installQuests, questView, lowHp, reviewEmbed } from '../src/quest-discord.js';
 import { runClickDiagnostic } from '../src/quest-race.js';
+import { quests } from '../src/quests/index.js';
+// Drowned Watch is retired (hidden) but still the engine's test fixture.
+quests['drowned-watch']=Object.freeze({...quests['drowned-watch'],status:'test'});
 
 const g='111111111111111111',p='222222222222222222';
 const input=()=>({v:2,quest:'drowned-watch',guild:g,player:p,channel:'333333333333333333',invocation:'444444444444444444',character:'beyond-456',name:'Bag test',hp:20,maxHp:20,tempHp:3,passive:13,skills:Object.fromEntries(['athletics','stealth','investigation','perception'].map(k=>[k,{mod:2,adv:null}])),loadout:{source:'bags-rewritten',collection:BAG_COLLECTION,bags:[['Backpack',{'Rations':3,"Jeweler's Tools":1}],['Satchel',{'Rations':2}]],coinsSource:'avrae-coinpurse'},coins:{pp:0,gp:4,ep:0,sp:0,cp:0},signature:'test'});
@@ -115,7 +118,7 @@ test('tide-box cost: simultaneous clicks spend once, receipt is pending, wrong e
   run=await store.act(run.id,g,p,3,'finish');assert.equal(run.state.scene,'complete');
   const receipt=(await db.query('SELECT status,receipt FROM ledger_quest_test_receipts WHERE run_id=$1',[run.id])).rows[0];
   assert.equal(receipt.status,'pending');assert.equal(receipt.receipt.changes.coins.gp,-1);assert.equal(receipt.receipt.starting.coins.gp,4);assert.equal(receipt.receipt.current.coins.gp,3);
-  const view=questView(run);const copy=view.embeds[0].fields.find(f=>f.name==='📦 Copy into Avrae').value;assert.match(copy,/−1 gp/);assert.match(copy,new RegExp(`!depart reconcile ${run.id}`));assert.equal(view.embeds[0].color,0xE0A526);
+  const view=questView(run);const copy=view.embeds[0].fields.find(f=>f.name==='🧾 Settle your expedition').value;assert.match(copy,/−1 gp/);assert.match(copy,new RegExp(`!depart settle ${run.id} gp=3\``));assert.equal(settleCommand(run),`!depart settle ${run.id} gp=3`);assert.equal(view.embeds[0].color,0xE0A526);
   await assert.rejects(store.open(input()),/Reconcile/);
   const unchanged=input();unchanged.reconcile=run.id;await assert.rejects(store.reconcile(unchanged),/do not match/);
   const overpaid=input();overpaid.reconcile=run.id;overpaid.coins.gp=2;await assert.rejects(store.reconcile(overpaid),/do not match/);
@@ -159,4 +162,13 @@ test('every expedition scene uses the shared Ledger card style',()=>{
   const landing=questView({...base,state:{...base.state,scene:'landing'}}).embeds[0];
   assert.equal(landing.fields[0].value,'Investigation: d20 **14** + 2 = **16** — ✅ Success');
   const done=questView({...base,state:{...base.state,scene:'complete'}}).embeds[0];assert.equal(done.color,0x3C9C63);assert.ok(done.fields.some(f=>/No changes/.test(f.value)));
+});
+
+test('settle command: final values for HP, coins and bag items; unsafe names fall back to manual',()=>{
+  const id='f0b8e6ae-b1de-472f-987c-89f9bd264cf9';
+  const run=(state)=>({id,snapshot:{hp:20,tempHp:3,coins:{pp:0,gp:4,ep:0,sp:0,cp:0},loadout:{items:[{bag:'Backpack',name:'Rations',qty:3},{bag:'Potions',name:'Healing Potion',qty:2}]}},state:{hp:20,tempHp:3,coins:{pp:0,gp:4,ep:0,sp:0,cp:0},items:[{bag:'Backpack',name:'Rations',qty:3},{bag:'Potions',name:'Healing Potion',qty:2}],...state}});
+  assert.equal(settleCommand(run({})),`!depart settle ${id}`);
+  assert.equal(settleCommand(run({hp:12,tempHp:0,coins:{pp:0,gp:3,ep:0,sp:5,cp:0},items:[{bag:'Backpack',name:'Rations',qty:3},{bag:'Potions',name:'Healing Potion',qty:1},{bag:'Backpack',name:'Drowned Key',qty:1}]})),
+    `!depart settle ${id} hp=12 temp=0 gp=3 sp=5 "Backpack:Drowned Key=1" "Potions:Healing Potion=1"`);
+  assert.equal(settleCommand(run({items:[{bag:'Potions',name:'Healing Potion',qty:2},{bag:'Backpack',name:'Rations',qty:3},{bag:'Backpack',name:'Odd "Quoted" Thing',qty:1}]})),null);
 });
