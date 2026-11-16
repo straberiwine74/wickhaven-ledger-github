@@ -6,7 +6,7 @@ export default {
   id: 'northern-shallows',
   name: 'The Northern Shallows',
   emoji: '🐟',
-  status: 'test',
+  status: 'live',
   start: 'harbor-chain',
   completion: {
     milestone: 'shallows-survey',
