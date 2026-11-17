@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Guild jobs and training | Thaleryn Wiki</title><link rel="stylesheet" href="wiki.css"></head>
+<body><a class="skip" href="#content">Skip to content</a><header><a href="index.html">Thaleryn Wiki</a></header>
+<div class="layout"><aside><nav aria-label="Reputation guide"><a href="reputation.html">Reputation Guide</a>
+<a href="rep-standing.html">Standing, tiers and the daily cap</a>
+<a href="rep-guilds.html">The four guilds</a>
+<a href="rep-earning.html">Earning rep</a>
+<a href="rep-pledging.html">Pledging to a guild</a>
+<a aria-current="page" href="rep-jobs-and-training.html">Guild jobs and training</a>
+<a href="rep-perks.html">What standing unlocks</a>
+<a href="rep-losing.html">Losing rep and the Back Alley</a>
+<hr>
+<a href="index.html">Downtime Guide</a></nav></aside>
+<main id="content"><div class="eyebrow">Reputation guide</div><h1>Guild jobs and training</h1>
+<h2>Jobs: <code>!job</code></h2>
+<p>Take on a day's work around Wickhaven. <code>!job</code> shows today's postings on every board. <code>!job &lt;board&gt;</code> takes one, in that board's channel.</p>
+<ul>
+<li>You get <strong>2 jobs a day</strong>, one per board. New postings go up at midnight UTC.</li>
+<li>Each job lists one or two skills and a DC, and the alias rolls your best listed skill.</li>
+<li>Beat the DC to pass. Beat it by <strong>5 or more</strong> for a great result.</li>
+<li>A guild won't hire you below <strong>150</strong> rep (Despised).</li>
+</ul>
+<div class="table-wrap" role="region" aria-label="Job boards" tabindex="0"><table>
+<thead>
+<tr>
+<th>Board</th>
+<th>Where</th>
+<th>Pays</th>
+<th>Rep</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>general</code></td>
+<td>The Workshop</td>
+<td>Pass 2d4 gp, great 4d4 gp, fail 2d4 sp</td>
+<td>None</td>
+</tr>
+<tr>
+<td><code>wayfarers</code>, <code>magisterium</code>, <code>hammer</code>, <code>unbound</code></td>
+<td>That guild's hall</td>
+<td>Pass 1d4 gp, great 2d4 gp, fail nothing</td>
+<td>+3 pass, +5 great (counts toward the daily cap)</td>
+</tr>
+</tbody>
+</table></div>
+<p>Guild work fits the guild: Wayfarers guide greenhorns and ride caravan escort, the Magisterium copies manuscripts and catalogs finds, the Hand &amp; Hammer hauls stock and inspects goods, and the Unbound calm surging sorcerers and run messages out of the Drift.</p>
+
+<h2>Training: <code>!train</code></h2>
+<p>Learn a new language, tool, weapon or skill from Wickhaven's trainers. It takes weeks of sessions and coin.</p>
+<div class="table-wrap" role="region" aria-label="Training commands" tabindex="0"><table>
+<thead>
+<tr>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>!train list</code></td>
+<td>What this trainer teaches, or where to find each trainer</td>
+</tr>
+<tr>
+<td><code>!train &lt;proficiency&gt;</code></td>
+<td>Start training, in that trainer's channel</td>
+</tr>
+<tr>
+<td><code>!train</code></td>
+<td>Take your weekly session (add <code>adv</code>, <code>dis</code> or <code>guidance</code> if they apply)</td>
+</tr>
+<tr>
+<td><code>!train status</code></td>
+<td>Your progress and when your next session is</td>
+</tr>
+<tr>
+<td><code>!train log</code></td>
+<td>Everything you've finished</td>
+</tr>
+<tr>
+<td><code>!train quit</code></td>
+<td>Drop your current training, with no refund</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>One session a week. You pay, then roll d20 + your best ability for that proficiency: under 10 is no progress, 10–19 is +1, 20+ is +2. On a natural 1 the trainer sends you home and you don't pay.</li>
+<li>Sessions needed: 10 minus the ability modifier (15 for skills), minimum 3. One thing at a time.</li>
+<li>Cost: <strong>5 gp</strong> a session for open lessons, <strong>10 gp</strong> for skills and advanced lessons.</li>
+<li>Guild trainers give <strong>+7 rep</strong> per paid session, outside the daily cap.</li>
+<li><strong>Advanced</strong> lessons need <strong>600+</strong> (Familiar Face) with the trainer's guild. If the guild Despises you, it won't teach you at all.</li>
+<li>The Lowside fixer belongs to no guild, never checks rep and gives no rep.</li>
+<li>When you finish, staff approve the new proficiency. Add it to your sheet and run <code>!update</code>.</li>
+</ul>
+<div class="table-wrap" role="region" aria-label="Trainers" tabindex="0"><table>
+<thead>
+<tr>
+<th>Trainer</th>
+<th>Open lessons</th>
+<th>Advanced (600+)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>✨ Magisterium</td>
+<td>Common languages, calligrapher's supplies, Arcana, History, Investigation, Religion</td>
+<td>Exotic languages (Abyssal, Celestial, Deep Speech, Infernal, Primordial, Sylvan, Undercommon), alchemist's supplies</td>
+</tr>
+<tr>
+<td>🔨 Hand &amp; Hammer</td>
+<td>Carpenter's, mason's, smith's, cobbler's, leatherworker's, weaver's and woodcarver's tools; brewer's supplies, potter's tools, cook's utensils; Persuasion</td>
+<td>Tinker's, glassblower's and jeweler's tools</td>
+</tr>
+<tr>
+<td>🧭 Wayfarers</td>
+<td>Simple weapons, cartographer's and navigator's tools, Athletics, Acrobatics, Animal Handling, Perception, Survival, Nature</td>
+<td>Martial weapons</td>
+</tr>
+<tr>
+<td>🔥 Unbound</td>
+<td>Instruments, painter's supplies, Medicine, Insight, Performance, Intimidation</td>
+<td>Herbalism kit</td>
+</tr>
+<tr>
+<td>Lowside fixer</td>
+<td>Gaming sets, disguise kit, Deception, Sleight of Hand, Stealth</td>
+<td>Forgery kit, thieves' tools, poisoner's kit (no rep needed)</td>
+</tr>
+</tbody>
+</table></div>
+
+<nav class="pager" aria-label="Adjacent articles"><span>← <a href="rep-pledging.html">Pledging to a guild</a></span><span><a href="rep-perks.html">What standing unlocks</a> →</span></nav></main></div></body></html>
