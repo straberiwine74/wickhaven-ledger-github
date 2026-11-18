@@ -12,8 +12,14 @@ import impossibleRoad from './impossible-road.js';
 import lowsideDiggers from './lowside-diggers.js';
 import ashSealedLedger from './ash-sealed-ledger.js';
 import { validateQuest } from '../quest-schema.js';
+// Sam's quests (added November 2026).Drowned Watch reinstated 
+import bellmire from './bellmire.js';
+import chalkGiant from './chalk-giant.js';
+import emptyFerry from './empty-ferry.js';
+import gullAndLantern from './gull-and-lantern.js';
+import saltingsHouse from './saltings-house.js';
 
-export const quests=Object.fromEntries([drownedWatch,briarfallRoad,saintOrrasOrchard,brinehookUndercroft,secondBeacon,northernShallows,easternLights,impossibleRoad,lowsideDiggers,ashSealedLedger].map(q=>[q.id,validateQuest(q)]));
+export const quests=Object.fromEntries([drownedWatch,briarfallRoad,saintOrrasOrchard,brinehookUndercroft,secondBeacon,northernShallows,easternLights,impossibleRoad,lowsideDiggers,ashSealedLedger,bellmire,chalkGiant,emptyFerry,gullAndLantern,saltingsHouse].map(q=>[q.id,validateQuest(q)]));
 export const getQuest=id=>Object.hasOwn(quests,id)?quests[id]:null;
 // Tests register throwaway quests through this; the bot never calls it.
 export function registerQuest(q) { if(Object.hasOwn(quests,q.id)) throw new Error(`Quest ${q.id} already exists.`); quests[q.id]=validateQuest(q); return quests[q.id]; }

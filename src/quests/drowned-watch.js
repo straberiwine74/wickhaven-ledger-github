@@ -10,12 +10,12 @@ export default {
   "id": "drowned-watch",
   "name": "Drowned Watch",
   "emoji": "🗼",
-  "status": "hidden",
+  "status": "live",
   "start": "shore",
   "completion": {
     "milestone": "watch-reconnaissance",
 	"ap": 1,
-    "first": " First reconnaissance recorded (journal only; no AP or gold).",
+    "first": " First reconnaissance recorded.",
     "repeat": " Repeat visit recorded. No additional reward."
   },
   "journal": {
