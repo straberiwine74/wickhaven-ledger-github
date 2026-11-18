@@ -124,6 +124,12 @@ tr:nth-child(even) td{background:rgba(239,225,196,.4)}
 .btn.gold{background:var(--gold);color:var(--night)}
 .btn.ghost{border:1px solid rgba(240,212,160,.6);color:var(--gold)}
 
+.hero.photo{padding:70px 46px;min-height:440px;display:flex;flex-direction:column;justify-content:center;
+  background:linear-gradient(90deg,rgba(11,22,38,.92) 0%,rgba(11,22,38,.7) 45%,rgba(11,22,38,.15) 80%),url(img/wickhaven.jpg) center 62%/cover}
+.hero.photo p{text-shadow:0 1px 3px rgba(0,0,0,.6)}
+.map-fig{margin:18px 0;border:3px solid var(--gold-deep);border-radius:12px;overflow:hidden;box-shadow:0 14px 30px -16px rgba(0,0,0,.6);background:var(--vellum)}
+.map-fig img{display:block;width:100%;height:auto}
+.map-fig figcaption{font-size:13px;font-style:italic;color:var(--ink-soft);padding:6px 14px}
 /* guild banners */
 .banner{border-radius:16px;padding:30px 34px;color:#fff;display:flex;gap:26px;align-items:center;position:relative;overflow:hidden;border:2px solid var(--gold-deep);margin-top:6px}
 .banner::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0 2px,transparent 2px 14px);pointer-events:none}
@@ -172,7 +178,7 @@ tr:nth-child(even) td{background:rgba(239,225,196,.4)}
   .search{margin-left:0}
   .g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr))}
   .split{grid-template-columns:1fr}
-  .hero{padding:34px 22px 140px}
+  .hero{padding:34px 22px 140px}.hero.photo{padding:40px 22px;min-height:380px}
   .banner{flex-direction:column;align-items:flex-start;padding:24px}
 }
 @media (max-width:600px){
