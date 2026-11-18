@@ -1,0 +1,84 @@
+<!-- {"title": "Earning rep", "lede": "Rep comes from what your character actually does for a guild. Some of it is everyday work that counts toward the daily cap; the bigger rewards skip it."} -->
+<div class="table-wrap" role="region" aria-label="Ways to earn rep" tabindex="0"><table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Where</th>
+<th>Rep</th>
+<th>Daily cap?</th>
+<th>Limit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>!turnin</code></td>
+<td>The guild's home</td>
+<td>Common +1, uncommon +3, rare +10 per item; delve relics double</td>
+<td>Skips</td>
+<td>None</td>
+</tr>
+<tr>
+<td><code>!order deliver</code></td>
+<td>The guild's home</td>
+<td>+10</td>
+<td>Skips</td>
+<td>1 per guild a week</td>
+</tr>
+<tr>
+<td><code>!job &lt;guild&gt;</code></td>
+<td>The guild's hall</td>
+<td>+3 on a pass, +5 on a great result</td>
+<td>Counts</td>
+<td>2 jobs a day, 1 per board</td>
+</tr>
+<tr>
+<td><code>!train</code></td>
+<td>The trainer's channel</td>
+<td>+7 per paid session with a guild trainer</td>
+<td>Skips</td>
+<td>1 session a week</td>
+</tr>
+<tr>
+<td><code>!craft</code></td>
+<td>Crafting channel</td>
+<td>+5 when you finish a project</td>
+<td>Skips</td>
+<td>1 work session a day</td>
+</tr>
+<tr>
+<td><code>!journal</code></td>
+<td>Anywhere</td>
+<td>+15 when you complete a page, +25 more for the third full set</td>
+<td>Skips</td>
+<td>Once per page</td>
+</tr>
+<tr>
+<td><code>!mine</code></td>
+<td>The Quarry</td>
+<td>Some encounters earn rep with a guild</td>
+<td>Counts</td>
+<td>Stamina</td>
+</tr>
+</tbody>
+</table></div>
+<p>If you're <a href="rep-pledging.html">pledged</a> to a guild, every rep gain with that guild counts <strong>×1.5</strong> (rounded), capped or not.</p>
+
+<h2>Turning in finds</h2>
+<p>A find is worth either rep or coin, never both: turn it in at the guild that wants it, or sell it. <code>!turnin list</code> works anywhere and shows everything you're carrying that a guild wants. <code>!turnin &lt;item&gt; [qty]</code> or <code>!turnin all</code> in the guild's home hands it over. The Wayfarers also take hearty dishes for the inns at +1 rep each. See <a href="trade.html">Turning in and selling</a> for the full list.</p>
+
+<h2>Guild orders</h2>
+<p>Each guild posts one order a week, with new orders every Monday at midnight UTC: 5 of a common find or 2 of an uncommon one. <code>!order</code> shows all four. <code>!order deliver</code> in that guild's home pays 160% of the items' value in coin plus <strong>+10 rep</strong>.</p>
+
+<h2>Jobs, training and crafting</h2>
+<p>Guild jobs and training have their own page: <a href="rep-jobs-and-training.html">Guild jobs and training</a>. Crafting projects give rep with the guild that owns the trade; see <a href="skinning-and-crafting.html">Skinning and crafting</a>.</p>
+
+<h2>Your collection journal</h2>
+<p>Each <code>!journal</code> page belongs to a guild. Find everything on a page for a title, +1 to that activity's rolls and <strong>+15 rep</strong> with the page's guild. Collect everything 3 times for a second title, +2 instead, and <strong>+25 more rep</strong>. See <a href="stamina-and-tools.html">Stamina, tools and your journal</a>.</p>
+
+<h2>What doesn't give rep</h2>
+<ul>
+<li><strong>Offerings.</strong> <code>!offering</code> at the Wick's shrines gives a blessing, not guild rep. See <a href="faiths.html">The faiths</a>.</li>
+<li><strong>General work.</strong> <code>!job general</code> at the Workshop pays better coin and earns no rep.</li>
+<li><strong>Selling.</strong> Anything you <code>!sell</code> earns coin only.</li>
+<li><strong>The Lowside fixer.</strong> Lessons from a trainer with no guild don't give rep.</li>
+</ul>

@@ -1,0 +1,26 @@
+<!-- {"title": "Solo expeditions", "lede": "Head out alone with the Wickhaven Ledger: short quests you play through with buttons, at your own pace."} -->
+<h2>How it works</h2>
+<div class="card"><ol class="steps">
+<li><div><h4><code>!depart &lt;quest code&gt;</code></h4><p>In the solo expeditions channel, for example <code>!depart drowned-watch</code>. <code>/ledger-quests</code> lists the quests and their codes; locked quests tell you how to unlock them.</p></div></li>
+<li><div><h4>Check your departure</h4><p>Avrae posts your sheet (level, HP, skills, saves, ability scores, passive Perception), your coins and the bags you're carrying. The Ledger replies with a Departure Review. Look it over, then <strong>Confirm loadout</strong>.</p></div></li>
+<li><div><h4>Play it through</h4><p>Make your choices with the buttons. Only you can press them.</p></div></li>
+<li><div><h4>Come home</h4><p>You'll finish with <strong>Expedition Complete</strong> or <strong>Carried Home</strong>, plus AP for any new milestones.</p></div></li>
+<li><div><h4>Reconcile</h4><p>If your HP, coins or items changed, the Ledger lists the changes. Update Avrae and your sheet, then run <code>!depart reconcile &lt;receipt-id&gt;</code>. New expeditions stay locked until this matches.</p></div></li>
+</ol></div>
+
+<h2>What you carry</h2>
+<ul>
+<li>By default you take your <strong>Pack, Belt, Potions</strong> and <strong>Scrolls</strong> bags.</li>
+<li>To pick different bags: <code>!cvar ledger_carried_bags ["Pack", "Belt"]</code>. Names must match <code>!bag</code> exactly.</li>
+<li>Your coin comes from your coin pouch if you're carrying it, or from your Avrae coin purse.</li>
+<li>Don't hide equipment you're actually carrying. Too much to fit? Carry fewer bags or ask staff.</li>
+</ul>
+
+<h2>Before you go</h2>
+<ul>
+<li>You need an approved character and a Bags Rewritten inventory. Run <code>!bag</code> once if you haven't.</li>
+<li>Every bag needs a unique name.</li>
+<li>If it says your sheet is missing something, run <code>!update</code> and try again.</li>
+<li>You can't depart at 0 HP, with an unreconciled expedition, or while another expedition is unfinished.</li>
+<li><code>/ledger-journal</code> shows your visits and discoveries.</li>
+</ul>

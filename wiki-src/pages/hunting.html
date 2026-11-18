@@ -1,0 +1,29 @@
+<!-- {"title": "Hunting", "lede": "Where the farmland gives way to wilderness, a robed wizard keeps a shimmering portal inside a circle of ancient stones. Step through, pick your ground, and bring something back.", "poster": "poster-hunting-fields.jpg", "poster_alt": "The Hunting Fields poster: gathering in the biomes and skinning after a hunt"} -->
+<div class="callout quote">"Choose carefully."</div>
+<h2>How a hunt works</h2>
+<div class="card"><ol class="steps">
+<li><div><h4><code>!hunt &lt;biome&gt; [difficulty]</code></h4><p>Rolls a random encounter for the biome channel you're in and adds the monsters to initiative.</p></div></li>
+<li><div><h4><code>!huntmap</code></h4><p>Loads a battle map for that biome. Run it <strong>before</strong> <code>!auto</code>. Run it again to swap in a different map.</p></div></li>
+<li><div><h4><code>!auto</code></h4><p>Places everyone on the map and runs the monsters.</p></div></li>
+<li><div><h4><code>!skin</code></h4><p>Once the monsters are down and <strong>before</strong> the fight ends: harvest hides, bone and monster parts. Survival or Nature, DC 12, 5 stamina.</p></div></li>
+<li><div><h4><code>!huntend</code></h4><p>Claims your XP and clears the combat.</p></div></li>
+</ol></div>
+
+<h2>The fourteen grounds</h2>
+<p>Each biome has its own channel, its own maps and its own finds. <code>!huntmap</code> only pulls maps for the channel you're in: no desert maps in the Arctic.</p>
+<div class="grid g4"><div class="biome" style="background:linear-gradient(150deg,#a9c6d9,#5d7f9c)"><b>Arctic</b><small>!hunt arctic</small></div><div class="biome" style="background:linear-gradient(150deg,#7b5fc0,#2a2058)"><b>Astral</b><small>!hunt astral</small></div><div class="biome" style="background:linear-gradient(150deg,#d9c08a,#2b6f80)"><b>Coastal</b><small>!hunt coastal</small></div><div class="biome" style="background:linear-gradient(150deg,#6f7e45,#3f4e2c)"><b>Swamp</b><small>!hunt swamp</small></div><div class="biome" style="background:linear-gradient(150deg,#e3b56b,#a8692e)"><b>Desert</b><small>!hunt desert</small></div><div class="biome" style="background:linear-gradient(150deg,#d27fb6,#6a3f86)"><b>Feywild</b><small>!hunt feywild</small></div><div class="biome" style="background:linear-gradient(150deg,#4f7f4c,#24452c)"><b>Forest</b><small>!hunt forest</small></div><div class="biome" style="background:linear-gradient(150deg,#c4b75c,#6d7b34)"><b>Grassland</b><small>!hunt grassland</small></div><div class="biome" style="background:linear-gradient(150deg,#9a9358,#5c6b3d)"><b>Hill</b><small>!hunt hill</small></div><div class="biome" style="background:linear-gradient(150deg,#8f949b,#4a4f58)"><b>Mountain</b><small>!hunt mountain</small></div><div class="biome" style="background:linear-gradient(150deg,#4a2f5e,#1a1426)"><b>Underdark</b><small>!hunt underdark</small></div><div class="biome" style="background:linear-gradient(150deg,#6c6f7e,#2b2d34)"><b>Haunted</b><small>!hunt haunted</small></div><div class="biome" style="background:linear-gradient(150deg,#2f8aa8,#123d5c)"><b>Underwater</b><small>!hunt underwater</small></div><div class="biome" style="background:linear-gradient(150deg,#8d7563,#4b3b33)"><b>Urban</b><small>!hunt urban</small></div></div>
+
+<div class="grid g2" style="margin-top:22px">
+<div class="card"><h3>Difficulty</h3><p>Leave it off for a random one, or name it:</p>
+<p><span class="pill">Easy</span><span class="pill">Medium</span><span class="pill">Hard</span><span class="pill">Deadly</span> <small>(2014 rules)</small><br><span class="pill">Low</span><span class="pill">Moderate</span><span class="pill">High</span> <small>(2024 rules)</small></p>
+<p>Hunting with friends? <code>!hunt coastal -levels 2,3,4</code> sizes it for three players at levels 2, 3 and 4. No spaces after the commas.</p></div>
+<div class="card"><h3>Map tools</h3><p><code>!huntmap list</code> shows every map for the biome, and <code>!huntmap grave</code> finds Graveyard (partial names work). It uses croebh's <strong>Map Utilities</strong>, so <code>!map</code> and <code>!move</code> work as normal. <code>!map help</code> has the rest.</p></div>
+</div>
+
+<h2>Gathering in the biomes</h2>
+<div class="grid g3">
+<div class="card"><h4>Every biome, its own list</h4><p>Frost lichen in the Arctic, fey dust in the Feywild, glowcaps in the Underdark. <code>!gather forage</code>, 8 stamina for a good haul.</p></div>
+<div class="card"><h4>DC 13 to 15</h4><p>Survival or Nature, depending on the biome. The harder biomes can hurt you on a bad roll.</p></div>
+<div class="card"><h4>56 to find</h4><p>Each biome hides at least one rare find. <code>!journal wilds</code> tracks them all. The Unbound want fey, astral and elemental finds; crafters use the rest.</p></div>
+</div>
+<p style="font-size:14px;color:var(--ink-soft)">Encounter Generator by alpha983, monster data compiled by alij, lightly edited for the Chronicles of Thaleryn.</p>
