@@ -124,9 +124,11 @@ tr:nth-child(even) td{background:rgba(239,225,196,.4)}
 .btn.gold{background:var(--gold);color:var(--night)}
 .btn.ghost{border:1px solid rgba(240,212,160,.6);color:var(--gold)}
 
-.hero.photo{padding:70px 46px;min-height:440px;display:flex;flex-direction:column;justify-content:center;
-  background:linear-gradient(90deg,rgba(11,22,38,.92) 0%,rgba(11,22,38,.7) 45%,rgba(11,22,38,.15) 80%),url(img/wickhaven.jpg) center 62%/cover}
-.hero.photo p{text-shadow:0 1px 3px rgba(0,0,0,.6)}
+.hero.photo{padding:70px 46px;min-height:440px;display:flex;flex-direction:column;justify-content:center;align-items:flex-end;text-align:right;
+  background:linear-gradient(270deg,rgba(11,22,38,.82) 0%,rgba(11,22,38,.5) 30%,rgba(11,22,38,0) 58%),url(img/wickhaven.jpg) center 62%/cover}
+.hero.photo p{max-width:440px;text-shadow:0 1px 4px rgba(0,0,0,.8)}
+.hero.photo h1,.hero.photo .crumbs{text-shadow:0 2px 6px rgba(0,0,0,.7)}
+.hero.photo .btn{margin:4px 0 4px 8px}
 .map-fig{margin:18px 0;border:3px solid var(--gold-deep);border-radius:12px;overflow:hidden;box-shadow:0 14px 30px -16px rgba(0,0,0,.6);background:var(--vellum)}
 .map-fig img{display:block;width:100%;height:auto}
 .map-fig figcaption{font-size:13px;font-style:italic;color:var(--ink-soft);padding:6px 14px}
@@ -178,7 +180,7 @@ tr:nth-child(even) td{background:rgba(239,225,196,.4)}
   .search{margin-left:0}
   .g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr))}
   .split{grid-template-columns:1fr}
-  .hero{padding:34px 22px 140px}.hero.photo{padding:40px 22px;min-height:380px}
+  .hero{padding:34px 22px 140px}.hero.photo{padding:40px 22px;min-height:380px;align-items:flex-start;text-align:left;background:linear-gradient(180deg,rgba(11,22,38,.25),rgba(11,22,38,.85)),url(img/wickhaven.jpg) center 62%/cover}.hero.photo .btn{margin:4px 8px 4px 0}
   .banner{flex-direction:column;align-items:flex-start;padding:24px}
 }
 @media (max-width:600px){
