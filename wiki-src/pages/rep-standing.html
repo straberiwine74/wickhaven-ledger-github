@@ -1,0 +1,33 @@
+<!-- {"title": "Standing, tiers and the daily cap", "lede": "Every character starts at <strong>250</strong> (Newcomer) with all four guilds, on a scale from 0 to 1,000. Where you sit on that scale sets your tier, and your tier decides how the guild treats you."} -->
+<h2>The eight tiers</h2>
+<p>Each tier is 125 points wide. "Renowned has nothing to do with power": rep reflects how a guild sees your character, not their level.</p>
+<div class="meter" role="img" aria-label="Reputation scale from 0 to 1,000 in eight tiers of 125"><div style="background:#5a2a2a">Despised</div><div style="background:#86513a">Distrusted</div><div style="background:#8a7a5c">Newcomer</div><div style="background:#6b7f5a">Familiar Face</div><div style="background:#2f6b5e">Known Hand</div><div style="background:#22406a">Trusted Name</div><div style="background:#4b3f7a">Notable</div><div style="background:#3b2147">Renowned</div></div>
+<div class="meter-scale"><span>0</span><span>125</span><span>250</span><span>375</span><span>500</span><span>625</span><span>750</span><span>875</span><span>1,000</span></div>
+<div class="table-wrap" role="region" aria-label="Reputation tiers" tabindex="0"><table>
+<thead><tr><th>Rep</th><th>Tier</th><th>What it means</th></tr></thead>
+<tbody>
+<tr><td>875+</td><td><strong>Renowned</strong></td><td>A recognized name, with exclusive quests, personal storylines and unique resources.</td></tr>
+<tr><td>750+</td><td><strong>Notable</strong></td><td>Talked about outside your circle, with specialized quests and storylines. You can run for a seat on the Conclave.</td></tr>
+<tr><td>625+</td><td><strong>Trusted Name</strong></td><td>Part of the guild's ongoing story. Leadership and mentoring open up, and you can vote in the Conclave.</td></tr>
+<tr><td>500+</td><td><strong>Known Hand</strong></td><td>Trusted with bigger jobs. The best Hand &amp; Hammer prices.</td></tr>
+<tr><td>375+</td><td><strong>Familiar Face</strong></td><td>Recognized, with personal NPC moments. Advanced lessons from the guild's trainer.</td></tr>
+<tr><td>250+</td><td><strong>Newcomer</strong></td><td>Where everyone starts. You can pledge to the guild.</td></tr>
+<tr><td>125+</td><td><strong>Distrusted</strong></td><td>Watched, with doors closing. You can't pledge, but the guild still hires you.</td></tr>
+<tr><td>0+</td><td><strong>Despised</strong></td><td>A real enemy of the guild. No jobs, no lessons, and recovery takes serious work.</td></tr>
+</tbody></table></div>
+
+<h2>Checking your standing: <code>!rep</code></h2>
+<p><code>!rep</code> works anywhere and shows your standing card:</p>
+<ul>
+<li>Your rep and tier with each guild</li>
+<li>How much rep you've earned with each guild today</li>
+<li>Who you're pledged to, if anyone</li>
+<li>Any rep loss still waiting to land (see <a href="rep-losing.html">Losing rep</a>)</li>
+</ul>
+<p>Any command that changes your rep also shows the result: your new total, the change, and a ⬆️ or ⬇️ when you move up or down a tier.</p>
+
+<h2>The daily cap</h2>
+<p>You can earn up to <strong>12 rep per guild per day</strong> from everyday work. The cap is separate for each guild, so you could earn 12 with the Wayfarers and another 12 with the Unbound on the same day. It resets at midnight UTC.</p>
+<p><strong>Counts toward the cap:</strong> guild jobs (<code>!job</code>) and guild encounters while mining (<code>!mine</code>).</p>
+<p><strong>Skips the cap:</strong> turn-ins (<code>!turnin</code>), guild orders (<code>!order deliver</code>), training sessions (<code>!train</code>), finished crafting projects (<code>!craft</code>) and collection journal pages (<code>!journal</code>).</p>
+<p>If a gain would put you over the cap, you get whatever room is left and the result says <em>Daily cap reached</em>. Rep losses are never capped.</p>

@@ -1,0 +1,68 @@
+<!-- {"title": "Turning in, selling and coin", "lede": "A find is worth either guild rep or coin, never both: turn it in at the guild that wants it, or sell it."} -->
+<h2>Turning in</h2>
+<p><strong><code>!turnin</code></strong> at a guild's home channel. Rep depends on rarity: common +1, uncommon +3, rare +10. Delve relics are worth double. Turn-ins skip the daily rep cap, and a pledge multiplies them by 1.5. <code>!turnin list</code> (works anywhere) shows everything you're carrying that a guild wants, and <code>!turnin all</code> hands over everything that guild takes.</p>
+<div class="table-wrap" role="region" aria-label="Reference table" tabindex="0"><table>
+<thead>
+<tr>
+<th>Guild</th>
+<th>What they want</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Wayfarers</td>
+<td>Most fish, hearty dishes for the inns, Golden Pumpkins and Golden Pheasants, road maps, compasses, waystones</td>
+</tr>
+<tr>
+<td>Hand &amp; Hammer</td>
+<td>Hides, stone, ore, timber, old tools and fittings, shark hide, gar scales</td>
+</tr>
+<tr>
+<td>Magisterium</td>
+<td>Ancient tablets and rune shards, Elaris mile-markers, Bluelight Caps, Pale-Marked Fish, strange monster parts, specimen fish</td>
+</tr>
+<tr>
+<td>Unbound</td>
+<td>Humming crystals, ember-glass, Wildfire Embers, Silverleaf, fey, astral and elemental finds, albino and golden fish</td>
+</tr>
+</tbody>
+</table></div>
+<h2>Selling</h2>
+<p><strong><code>!sell</code></strong> works in two shops, and they buy different things:</p>
+<div class="table-wrap" role="region" aria-label="Reference table" tabindex="0"><table>
+<thead>
+<tr>
+<th>Shop</th>
+<th>Buys</th>
+<th>Pays</th>
+<th>Guild bonus</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The Night Market</td>
+<td>Downtime finds (crops, game, fish, ore, stone, gems, relics, parts), things you made with <code>!cook</code> or <code>!make</code>, treasure you found, and gear you bought there</td>
+<td>Each find's listed price; Fine and Excellent goods sell for more; bought gear at half price</td>
+<td>Hand &amp; Hammer: +10% at 375 rep, +20% at 500</td>
+</tr>
+<tr>
+<td>Secondhand Goods</td>
+<td>Ordinary gear: anything with a book price in the shop list, wherever it came from</td>
+<td>Half the book price</td>
+<td>Wayfarers: +5% at 375 rep</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>!sell list</code> shows what the shop you're standing in will buy and for how much. <code>!sell</code> only buys back things a character actually made or found, so starting gear and D&amp;D Beyond items can't be passed off as crafted goods or treasure. Remove whatever you sell from your D&amp;D Beyond sheet.</p>
+<h2>Buying</h2>
+<p><strong><code>!buy</code></strong> at the Night Market. Prices follow the 2024 Player's Handbook. <code>!buy</code> shows the stalls (<code>general</code>, <code>arms</code>, <code>armor</code>, <code>tools</code>, <code>arcana</code>, <code>apothecary</code>, <code>stables</code>), <code>!buy &lt;stall&gt;</code> shows one, and <code>!buy &lt;item&gt; [qty]</code> buys up to 100 at a time. Recipe scrolls (<code>!learnrecipe</code>) and tool upgrades (<code>!tools buy</code>) are sold there too.</p>
+<ul><li>Hand &amp; Hammer standing gets you <strong>5% off at 375+</strong> and <strong>10% off at 500+</strong>.</li><li>What you buy goes into your bags. Add it to your D&amp;D Beyond sheet too. Anything you buy can be sold back with <code>!sell</code>.</li></ul>
+<h2>Guild orders</h2>
+<p> Each guild posts one order a week (new orders every Monday at midnight UTC): 5 of a common find or 2 of an uncommon one. <code>!order</code> shows all four. <code>!order deliver</code> in that guild's home fills it for 160% of the items' value in coin plus <strong>+10 rep</strong>, outside the daily cap. One delivery per guild per week.</p>
+
+<h2>Other ways to earn coin</h2>
+<div class="grid g3">
+<div class="card"><h4>Day labor</h4><p><code>!job</code>: 2 jobs a day. General work at the Workshop pays better coin; guild work pays less but earns rep. <a href="rep-jobs-and-training.html">More</a></p></div>
+<div class="card dark"><h4>The Crooked Coin</h4><p><code>!gamble</code>: High-Low, Bones or Dragon's Eye, 1–50 gp a bet, 5 plays a day. <a href="lowside.html" style="color:var(--gold)">More</a></p></div>
+<div class="card dark"><h4>The Back Alley</h4><p><code>!alley</code>: better gear than the town sells, if you don't get caught. <a href="rep-losing.html" style="color:var(--gold)">More</a></p></div>
+</div>
