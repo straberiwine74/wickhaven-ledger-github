@@ -97,7 +97,7 @@ if (pool) {
   birthdays = new Birthdays(pool, client, { guildId: DISCORD_GUILD_ID });
   try { await birthdays.init(); } catch { console.error('Birthdays could not initialize; /birthday is off.'); birthdays = null; }
 }
-birthdays.run().catch(e => console.error(`Birthday check could not complete; it will try again shortly. Reason: ${e?.code ?? 'no code'} ${e?.message ?? 'unknown'}`)); }, 60 * 60000);
+const birthdayTimer = setInterval(() => { if (birthdays && client.isReady()) birthdays.run().catch(e => console.error(`Birthday check could not complete; it will try again shortly. Reason: ${e?.code ?? 'no code'} ${e?.message ?? 'unknown'}`)); }, 60 * 60000);
 if (ledger) ledger.staffNotice = async payload => { if (!(live.live ? live.log : TEST_CHANNEL_ID)) throw new Error('No staff channel configured.'); await report(payload); };
 client.once(Events.ClientReady, async () => {
   console.log(`Ledger connected. Mode: ${live.live ? 'LIVE' : savedTestMode ? 'saved TEST AP' : 'ownership test'}.`);
