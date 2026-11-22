@@ -54,9 +54,9 @@ let publishing=false;
 async function publishPending(){
   if(publishing||!ledger?.reviewPosts||!client.isReady())return;
   publishing=true;
-  try{await ledger.reviewPosts.retryPending();await ledger.notifications?.retryPending();}catch{console.error('Character-review publishing could not complete.');}finally{publishing=false;}
+  try{await ledger.reviewPosts.retryPending();await ledger.notifications?.retryPending();}catch(e){console.error(`Character-review publishing could not complete. Reason: ${e?.code ?? 'no code'} ${e?.message ?? 'unknown'}`);}finally{publishing=false;}
 }
-const publicationTimer=setInterval(()=>{void publishPending();},60000);
+const publicationTimer=setInterval(()=>{void publishPending();},1800000);
 // Pay quest AP held at the daily cap once a new Chicago day has room.
 const settleTimer=setInterval(()=>{if(ledger&&live.live)ledger.settle(DISCORD_GUILD_ID).catch(()=>console.error('Held AP could not be settled; it stays held.'));},3600000);
 const recent = new Map();
@@ -97,7 +97,7 @@ if (pool) {
   birthdays = new Birthdays(pool, client, { guildId: DISCORD_GUILD_ID });
   try { await birthdays.init(); } catch { console.error('Birthdays could not initialize; /birthday is off.'); birthdays = null; }
 }
-const birthdayTimer = setInterval(() => { if (birthdays && client.isReady()) birthdays.run().catch(() => console.error('Birthday check could not complete; it will try again shortly.')); }, 5 * 60000);
+birthdays.run().catch(e => console.error(`Birthday check could not complete; it will try again shortly. Reason: ${e?.code ?? 'no code'} ${e?.message ?? 'unknown'}`)); }, 60 * 60000);
 if (ledger) ledger.staffNotice = async payload => { if (!(live.live ? live.log : TEST_CHANNEL_ID)) throw new Error('No staff channel configured.'); await report(payload); };
 client.once(Events.ClientReady, async () => {
   console.log(`Ledger connected. Mode: ${live.live ? 'LIVE' : savedTestMode ? 'saved TEST AP' : 'ownership test'}.`);
@@ -119,7 +119,7 @@ client.once(Events.ClientReady, async () => {
   }
   catch { console.error('Cannot post startup greeting; check test-channel permissions.'); }
   void publishPending();
-  if (birthdays) birthdays.run().catch(() => console.error('Birthday check could not complete; it will try again shortly.'));
+    if (birthdays) birthdays.run().catch(e => console.error(`Birthday check could not complete; it will try again shortly. Reason: ${e?.code ?? 'no code'} ${e?.message ?? 'unknown'}`));
 });
 client.on(Events.InteractionCreate, async interaction => {
   if(interaction.customId?.startsWith('quest:')) return;
