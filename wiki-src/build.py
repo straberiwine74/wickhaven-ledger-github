@@ -14,7 +14,7 @@ It writes every page into docs/ (what GitHub Pages serves), plus
 docs/search-index.js for the search box. Add a new page by creating its
 fragment and adding it to NAV below.
 """
-import html, json, os, re
+import hashlib, html, json, os, re
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 PAGES = os.path.join(ROOT, "pages")
@@ -120,6 +120,7 @@ def sidebar(current):
 
 
 def page(slug, meta, body):
+    VER = version()
     sec, items, i = section_of(slug)
     title = meta["title"]
     top = "".join('<a href="%s.html"%s>%s</a>' % (s, ' class="on"' if section_of(s)[0] == sec else '', t) for s, t in TOP)
@@ -146,7 +147,7 @@ def page(slug, meta, body):
 <title>{html.escape(doc_title)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&display=swap">
-<link rel="stylesheet" href="wiki.css"></head>
+<link rel="stylesheet" href="wiki.css?v={VER}"></head>
 <body><a class="skip" href="#content">Skip to content</a>
 <header class="site-head"><div class="head-inner">
 <a class="brand" href="index.html">{FLAME}<span><span class="word">THALERYN</span><span class="sub">The Chronicles · Wiki</span></span></a>
@@ -161,9 +162,25 @@ def page(slug, meta, body):
 {pager}</main>
 </div></div>
 <footer class="foot"><div class="wrap"><span class="cinzel">The Chronicles of Thaleryn</span><span>Player wiki · daily limits reset at midnight UTC</span></div></footer>
-<script src="search-index.js"></script><script src="wiki.js"></script>
+<script src="search-index.js?v={VER}"></script><script src="wiki.js?v={VER}"></script>
 </body></html>
 """
+
+
+_VER = None
+
+
+def version():
+    """Short hash of the CSS, JS and page sources, so browsers fetch new styles after every change."""
+    global _VER
+    if _VER is None:
+        h = hashlib.sha1()
+        for name in ("wiki.css", "wiki.js"):
+            h.update(open(os.path.join(OUT, name), "rb").read())
+        for f in sorted(os.listdir(PAGES)):
+            h.update(open(os.path.join(PAGES, f), "rb").read())
+        _VER = h.hexdigest()[:8]
+    return _VER
 
 
 def text_of(body):
